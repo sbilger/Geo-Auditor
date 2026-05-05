@@ -275,9 +275,9 @@ def audit():
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Could not fetch the page: {e}"}), 422
 
-    if scraped["word_count"] < 20:
+    if not scraped["title"] and not scraped["headings"] and scraped["word_count"] == 0:
         return jsonify({"error": (
-            "This page returned almost no readable content — it likely requires JavaScript to render. "
+            "This page returned no readable content — it likely requires JavaScript to render. "
             "GEO Auditor can only analyze pages that load their text in plain HTML."
         )}), 422
 
