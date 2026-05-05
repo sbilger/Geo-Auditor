@@ -19,7 +19,7 @@ GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_M
 
 XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 XAI_URL = "https://api.x.ai/v1/chat/completions"
-XAI_MODEL = "grok-2-1212"
+XAI_MODEL = os.environ.get("XAI_MODEL", "grok-3-mini")
 
 HEADERS = {
     "User-Agent": (
@@ -366,6 +366,14 @@ def analyze_with_xai(scraped: dict) -> dict:
 
         if resp.status_code in (401, 403):
             raise ValueError("Invalid xAI API key — check it at console.x.ai.")
+
+        if resp.status_code == 400:
+            # Surface the actual xAI error so we can see what's wrong with the request
+            try:
+                err_detail = resp.json().get("error", resp.text[:200])
+            except Exception:
+                err_detail = resp.text[:200]
+            raise ValueError(f"xAI rejected request (400): {err_detail}")
 
         resp.raise_for_status()
 
