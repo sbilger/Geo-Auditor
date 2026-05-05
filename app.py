@@ -449,7 +449,7 @@ def analyze_with_gemini(scraped: dict) -> dict:
             if attempt < 2:
                 time.sleep(8)
                 continue
-            raise ValueError("Both Groq and Gemini are rate-limited. Try again in a few minutes.")
+            raise ValueError("Gemini rate limit reached.")
 
         if resp.status_code in (401, 403):
             raise ValueError("Invalid Gemini API key — check it at aistudio.google.com.")
@@ -492,10 +492,9 @@ def analyze_with_gemini(scraped: dict) -> dict:
 
 
 def run_audit_with_fallbacks(scraped: dict):
-    """Try LLM providers in order: Groq → xAI → Gemini → synthetic.
+    """Try LLM providers in order: xAI → Gemini → synthetic.
     Returns either an audit dict, or a (jsonify_response, status_code) tuple on hard failure."""
     providers = [
-        ("Groq", GROQ_API_KEY, analyze_with_llm),
         ("xAI", XAI_API_KEY, analyze_with_xai),
         ("Gemini", GEMINI_API_KEY, analyze_with_gemini),
     ]
@@ -520,9 +519,9 @@ def run_audit_with_fallbacks(scraped: dict):
     if last_error:
         return jsonify({"error": (
             f"All available LLM providers failed. Last error: {last_error}. "
-            "Add a working GROQ_API_KEY, XAI_API_KEY, or GEMINI_API_KEY in Render."
+            "Check that XAI_API_KEY or GEMINI_API_KEY in Render are valid."
         )}), 503
-    return jsonify({"error": "No LLM API keys configured. Set GROQ_API_KEY, XAI_API_KEY, or GEMINI_API_KEY."}), 503
+    return jsonify({"error": "No LLM API keys configured. Set XAI_API_KEY or GEMINI_API_KEY."}), 503
 
 
 def synthetic_audit_for_empty_page(scraped: dict) -> dict:
@@ -585,8 +584,8 @@ def index():
 
 @app.route("/api/audit", methods=["POST"])
 def audit():
-    if not (GROQ_API_KEY or XAI_API_KEY or GEMINI_API_KEY):
-        return jsonify({"error": "No LLM API key configured. Set GROQ_API_KEY, XAI_API_KEY, or GEMINI_API_KEY in Render."}), 503
+    if not (XAI_API_KEY or GEMINI_API_KEY):
+        return jsonify({"error": "No LLM API key configured. Set XAI_API_KEY or GEMINI_API_KEY in Render."}), 503
 
     body = request.get_json(force=True)
     url = (body.get("url") or "").strip()
