@@ -164,49 +164,53 @@
     <section id="results" class="hidden space-y-8 fade-up">
 
       <!-- Overall score + verdict -->
-      <div id="overallCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-8 flex flex-col sm:flex-row items-center gap-8">
-        <!-- Donut -->
-        <div class="relative shrink-0 w-36 h-36">
-          <svg class="w-36 h-36 -rotate-90" viewBox="0 0 90 90">
-            <circle cx="45" cy="45" r="40" fill="none" stroke="#1e293b" stroke-width="8"/>
-            <circle id="scoreCircle" cx="45" cy="45" r="40" fill="none" stroke="#4f7fff" stroke-width="8"
-              stroke-linecap="round" class="score-ring" style="stroke-dashoffset:251.2"/>
-          </svg>
-          <div class="absolute inset-0 flex flex-col items-center justify-center">
-            <span id="overallScore" class="text-4xl font-extrabold text-white">—</span>
-            <span id="overallGrade" class="text-sm font-bold text-brand-500"></span>
-          </div>
-        </div>
-        <!-- Info -->
-        <div class="flex-1 text-center sm:text-left">
-          <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">GEO Overall Score</p>
-          <h2 class="text-2xl font-bold text-white mb-2" id="pageTitle">—</h2>
-          <p class="text-slate-400 text-sm mb-4" id="pageUrl"></p>
-          <div class="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm px-4 py-2 rounded-xl">
-            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      <div id="overallCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
+        <!-- Top row: donut + title/url + stats -->
+        <div class="flex flex-col sm:flex-row items-center gap-6">
+          <!-- Donut -->
+          <div class="relative shrink-0 w-32 h-32">
+            <svg class="w-32 h-32 -rotate-90" viewBox="0 0 90 90">
+              <circle cx="45" cy="45" r="40" fill="none" stroke="#1e293b" stroke-width="8"/>
+              <circle id="scoreCircle" cx="45" cy="45" r="40" fill="none" stroke="#4f7fff" stroke-width="8"
+                stroke-linecap="round" class="score-ring" style="stroke-dashoffset:251.2"/>
             </svg>
-            <span id="verdict"></span>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+              <span id="overallScore" class="text-4xl font-extrabold text-white">—</span>
+              <span id="overallGrade" class="text-sm font-bold text-brand-500"></span>
+            </div>
+          </div>
+          <!-- Title block -->
+          <div class="flex-1 min-w-0 text-center sm:text-left">
+            <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">GEO Overall Score</p>
+            <h2 class="text-xl sm:text-2xl font-bold text-white mb-1 break-words" id="pageTitle">—</h2>
+            <p class="text-slate-400 text-sm break-all" id="pageUrl"></p>
+          </div>
+          <!-- Stats -->
+          <div class="shrink-0 grid grid-cols-2 gap-2 text-center w-full sm:w-auto">
+            <div class="bg-slate-800 rounded-xl px-3 py-2 min-w-[80px]">
+              <p class="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wider">Words</p>
+              <p class="font-bold text-white text-sm" id="statWords">—</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl px-3 py-2 min-w-[80px]">
+              <p class="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wider">Schema</p>
+              <p class="font-bold text-sm" id="statSchema">—</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl px-3 py-2 min-w-[80px]">
+              <p class="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wider">FAQ</p>
+              <p class="font-bold text-sm" id="statFaq">—</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl px-3 py-2 min-w-[80px]">
+              <p class="text-[10px] text-slate-500 mb-0.5 uppercase tracking-wider">Type</p>
+              <p class="font-bold text-slate-300 text-[11px] leading-tight" id="statBiz">—</p>
+            </div>
           </div>
         </div>
-        <!-- Quick stats -->
-        <div class="shrink-0 grid grid-cols-2 gap-3 text-center">
-          <div class="bg-slate-800 rounded-xl px-4 py-3">
-            <p class="text-xs text-slate-500 mb-0.5">Words</p>
-            <p class="font-bold text-white" id="statWords">—</p>
-          </div>
-          <div class="bg-slate-800 rounded-xl px-4 py-3">
-            <p class="text-xs text-slate-500 mb-0.5">Schema</p>
-            <p class="font-bold" id="statSchema">—</p>
-          </div>
-          <div class="bg-slate-800 rounded-xl px-4 py-3">
-            <p class="text-xs text-slate-500 mb-0.5">FAQ</p>
-            <p class="font-bold" id="statFaq">—</p>
-          </div>
-          <div class="bg-slate-800 rounded-xl px-4 py-3">
-            <p class="text-xs text-slate-500 mb-0.5">Business</p>
-            <p class="font-bold text-slate-300 text-xs leading-tight" id="statBiz">—</p>
-          </div>
+        <!-- Verdict (full width) -->
+        <div class="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm px-4 py-3 rounded-xl">
+          <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span id="verdict"></span>
         </div>
       </div>
 
@@ -503,7 +507,7 @@ function downloadBlockedReport(url) {
 <div class="page-footer">
   <div>
     <div class="footer-brand">HOGTRON SOLUTIONS</div>
-    <div class="footer-contact">hello@hogtronsolutions.com &nbsp;·&nbsp; (610) 663-0462 &nbsp;·&nbsp; seanbilger.xyz</div>
+    <div class="footer-contact">sales@hogtron-solutions.com &nbsp;·&nbsp; (610) 663-0462 &nbsp;·&nbsp; seanbilger.xyz</div>
   </div>
   <div style="text-align:right;font-size:11px;color:#B8D4E8;">
     Prepared by Sean Bilger<br>Freelance Software Developer & Project Manager
@@ -884,7 +888,7 @@ function downloadReport() {
   <div class="meta-row"><span class="meta-label">Client</span><span class="meta-value">${meta.title || meta.url}</span></div>
   <div class="meta-row"><span class="meta-label">Auditor</span><span class="meta-value">HogTron Solutions</span></div>
   <div class="meta-row"><span class="meta-label">URL</span><span class="meta-value">${meta.url}</span></div>
-  <div class="meta-row"><span class="meta-label">Contact</span><span class="meta-value">hello@hogtronsolutions.com</span></div>
+  <div class="meta-row"><span class="meta-label">Contact</span><span class="meta-value">sales@hogtron-solutions.com</span></div>
   <div class="meta-row"><span class="meta-label">Scope</span><span class="meta-value">AI Search Engine Optimization (GEO)</span></div>
   <div class="meta-row"><span class="meta-label">Date</span><span class="meta-value">${today}</span></div>
 </div>
@@ -924,7 +928,7 @@ ${pillarRows}
 <div class="page-footer">
   <div>
     <div class="footer-brand">HOGTRON SOLUTIONS</div>
-    <div class="footer-contact">hello@hogtronsolutions.com &nbsp;·&nbsp; (610) 663-0462 &nbsp;·&nbsp; seanbilger.xyz</div>
+    <div class="footer-contact">sales@hogtron-solutions.com &nbsp;·&nbsp; (610) 663-0462 &nbsp;·&nbsp; seanbilger.xyz</div>
   </div>
   <div style="text-align:right;font-size:11px;color:#94a3b8;">
     Prepared by Sean Bilger<br>Freelance Software Developer & Project Manager

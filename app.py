@@ -539,7 +539,7 @@ def synthetic_audit_for_empty_page(scraped: dict) -> dict:
     return {
         "overall_score": 5,
         "overall_grade": "F",
-        "business_type_detected": "Unknown (JavaScript-rendered site)",
+        "business_type_detected": "JS-rendered site",
         "one_line_verdict": "AI engines see almost nothing — your site relies on JavaScript to display its content, which most AI crawlers cannot read.",
         "pillars": {
             "conversational_clarity": pillar(
