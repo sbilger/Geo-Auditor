@@ -232,7 +232,6 @@ def analyze_with_llm(scraped: dict) -> dict:
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 2000,
         "temperature": 0.2,
-        "response_format": {"type": "json_object"},
     }
 
     last_json_error = None
@@ -259,6 +258,7 @@ def analyze_with_llm(scraped: dict) -> dict:
         resp.raise_for_status()
 
         raw = resp.json()["choices"][0]["message"]["content"].strip()
+        # Strip markdown fences
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
 
@@ -267,12 +267,24 @@ def analyze_with_llm(scraped: dict) -> dict:
             time.sleep(3)
             continue
 
+        # Try direct parse first, then fall back to extracting the JSON object
         try:
             return json.loads(raw)
-        except json.JSONDecodeError as e:
-            last_json_error = e
-            time.sleep(3)
-            continue
+        except json.JSONDecodeError:
+            pass
+
+        # Find the outermost { ... } block in case the model added surrounding text
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError as e:
+                last_json_error = e
+        else:
+            last_json_error = json.JSONDecodeError("No JSON object found in LLM response", raw, 0)
+
+        time.sleep(3)
+        continue
 
     raise last_json_error
 
