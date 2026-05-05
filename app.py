@@ -229,7 +229,17 @@ def analyze_with_llm(scraped: dict) -> dict:
 
     payload = {
         "model": GROQ_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a GEO audit assistant. You ALWAYS respond with valid JSON only — "
+                    "no explanations, no refusals, no markdown. If the page has little or no content, "
+                    "still return the full JSON structure with scores of 0 and notes reflecting the lack of content."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
         "max_tokens": 2000,
         "temperature": 0.2,
     }
