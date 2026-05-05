@@ -17,6 +17,10 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-2.0-flash"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
+XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
+XAI_URL = "https://api.x.ai/v1/chat/completions"
+XAI_MODEL = "grok-2-1212"
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -303,6 +307,96 @@ def analyze_with_llm(scraped: dict) -> dict:
     raise last_json_error
 
 
+def analyze_with_xai(scraped: dict) -> dict:
+    """Fallback to xAI Grok when Groq is unavailable. Uses OpenAI-compatible API."""
+    if not XAI_API_KEY:
+        raise ValueError("XAI_API_KEY is not set.")
+
+    import time
+
+    headings_text = "\n".join(
+        f"  {h['level']}: {h['text']}" for h in scraped["headings"]
+    )
+    prompt = AUDIT_PROMPT.format(
+        url=scraped["url"],
+        title=scraped["title"],
+        meta_description=scraped["meta_description"],
+        has_schema_markup=scraped["has_schema_markup"],
+        schema_types=", ".join(scraped["schema_types"]) or "None detected",
+        has_faq_section=scraped["has_faq_section"],
+        word_count=scraped["word_count"],
+        headings=headings_text or "(none found)",
+        body_text=scraped["body_text"][:2000],
+    )
+
+    payload = {
+        "model": XAI_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a GEO audit assistant. You ALWAYS respond with valid JSON only — "
+                    "no explanations, no refusals, no markdown. If the page has little or no content, "
+                    "still return the full JSON structure with scores of 0 and notes reflecting the lack of content."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "max_tokens": 2000,
+        "temperature": 0.2,
+    }
+
+    last_json_error = None
+    for attempt in range(3):
+        resp = requests.post(
+            XAI_URL,
+            headers={
+                "Authorization": f"Bearer {XAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=60,
+        )
+
+        if resp.status_code == 429:
+            if attempt < 2:
+                time.sleep(8)
+                continue
+            raise ValueError("xAI rate limit reached.")
+
+        if resp.status_code in (401, 403):
+            raise ValueError("Invalid xAI API key — check it at console.x.ai.")
+
+        resp.raise_for_status()
+
+        raw = resp.json()["choices"][0]["message"]["content"].strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+
+        if not raw:
+            last_json_error = json.JSONDecodeError("xAI returned an empty response", "", 0)
+            time.sleep(3)
+            continue
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            pass
+
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError as e:
+                last_json_error = e
+        else:
+            last_json_error = json.JSONDecodeError("No JSON object found in xAI response", raw, 0)
+
+        time.sleep(3)
+
+    raise last_json_error
+
+
 def analyze_with_gemini(scraped: dict) -> dict:
     """Fallback to Google Gemini when Groq is unavailable or rate-limited."""
     if not GEMINI_API_KEY:
@@ -397,6 +491,40 @@ def analyze_with_gemini(scraped: dict) -> dict:
     raise last_json_error
 
 
+def run_audit_with_fallbacks(scraped: dict):
+    """Try LLM providers in order: Groq → xAI → Gemini → synthetic.
+    Returns either an audit dict, or a (jsonify_response, status_code) tuple on hard failure."""
+    providers = [
+        ("Groq", GROQ_API_KEY, analyze_with_llm),
+        ("xAI", XAI_API_KEY, analyze_with_xai),
+        ("Gemini", GEMINI_API_KEY, analyze_with_gemini),
+    ]
+
+    last_error = None
+    for name, key, fn in providers:
+        if not key:
+            continue
+        try:
+            return fn(scraped)
+        except json.JSONDecodeError:
+            # Provider returned non-JSON — page is likely JS-rendered, return synthetic
+            return synthetic_audit_for_empty_page(scraped)
+        except ValueError as e:
+            last_error = e
+            # Rate-limit or auth error — try the next provider
+            continue
+        except requests.exceptions.RequestException as e:
+            last_error = e
+            continue
+
+    if last_error:
+        return jsonify({"error": (
+            f"All available LLM providers failed. Last error: {last_error}. "
+            "Add a working GROQ_API_KEY, XAI_API_KEY, or GEMINI_API_KEY in Render."
+        )}), 503
+    return jsonify({"error": "No LLM API keys configured. Set GROQ_API_KEY, XAI_API_KEY, or GEMINI_API_KEY."}), 503
+
+
 def synthetic_audit_for_empty_page(scraped: dict) -> dict:
     """Return a deterministic GEO audit for pages with little or no scrapable content
     (typically JavaScript-rendered SPAs like Shopify, Wix, Squarespace storefronts)."""
@@ -457,8 +585,8 @@ def index():
 
 @app.route("/api/audit", methods=["POST"])
 def audit():
-    if not GROQ_API_KEY or GROQ_API_KEY == "YOUR_GROQ_API_KEY_HERE":
-        return jsonify({"error": "GROQ_API_KEY is not set. Add your key from console.groq.com to app.py line 12."}), 503
+    if not (GROQ_API_KEY or XAI_API_KEY or GEMINI_API_KEY):
+        return jsonify({"error": "No LLM API key configured. Set GROQ_API_KEY, XAI_API_KEY, or GEMINI_API_KEY in Render."}), 503
 
     body = request.get_json(force=True)
     url = (body.get("url") or "").strip()
@@ -481,29 +609,9 @@ def audit():
     if is_near_empty:
         analysis = synthetic_audit_for_empty_page(scraped)
     else:
-        groq_failed_with_rate_limit = False
-        try:
-            analysis = analyze_with_llm(scraped)
-        except ValueError as e:
-            # Rate-limit / API key errors — try Gemini as fallback
-            if "Rate limit" in str(e) and GEMINI_API_KEY:
-                groq_failed_with_rate_limit = True
-            else:
-                return jsonify({"error": str(e)}), 503
-        except json.JSONDecodeError:
-            analysis = synthetic_audit_for_empty_page(scraped)
-        except requests.exceptions.RequestException as e:
-            return jsonify({"error": f"API error: {e}"}), 500
-
-        if groq_failed_with_rate_limit:
-            try:
-                analysis = analyze_with_gemini(scraped)
-            except ValueError as e:
-                return jsonify({"error": str(e)}), 503
-            except json.JSONDecodeError:
-                analysis = synthetic_audit_for_empty_page(scraped)
-            except requests.exceptions.RequestException as e:
-                return jsonify({"error": f"API error: {e}"}), 500
+        analysis = run_audit_with_fallbacks(scraped)
+        if isinstance(analysis, tuple):  # error response
+            return analysis
 
     return jsonify({
         "meta": {
