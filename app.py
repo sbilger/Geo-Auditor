@@ -499,29 +499,23 @@ def run_audit_with_fallbacks(scraped: dict):
         ("Gemini", GEMINI_API_KEY, analyze_with_gemini),
     ]
 
-    last_error = None
+    errors = []
     for name, key, fn in providers:
         if not key:
+            errors.append(f"{name}: not configured")
             continue
         try:
             return fn(scraped)
         except json.JSONDecodeError:
-            # Provider returned non-JSON — page is likely JS-rendered, return synthetic
             return synthetic_audit_for_empty_page(scraped)
         except ValueError as e:
-            last_error = e
-            # Rate-limit or auth error — try the next provider
+            errors.append(f"{name}: {e}")
             continue
         except requests.exceptions.RequestException as e:
-            last_error = e
+            errors.append(f"{name}: {e}")
             continue
 
-    if last_error:
-        return jsonify({"error": (
-            f"All available LLM providers failed. Last error: {last_error}. "
-            "Check that XAI_API_KEY or GEMINI_API_KEY in Render are valid."
-        )}), 503
-    return jsonify({"error": "No LLM API keys configured. Set XAI_API_KEY or GEMINI_API_KEY."}), 503
+    return jsonify({"error": "All LLM providers failed → " + " | ".join(errors)}), 503
 
 
 def synthetic_audit_for_empty_page(scraped: dict) -> dict:
