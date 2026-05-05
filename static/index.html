@@ -118,6 +118,35 @@
       </div>
     </section>
 
+    <!-- Blocked Site Response -->
+    <section id="blockedBox" class="hidden mb-8 space-y-6 fade-up">
+      <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-6 flex gap-4 items-start">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+          <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-emerald-400 font-bold text-sm uppercase tracking-wider mb-1">Bot Protection Detected</p>
+          <p class="text-slate-100 font-semibold text-base mb-2" id="blockedUrl"></p>
+          <p class="text-slate-300 text-sm">This site has bot protection enabled — that's actually a good sign. It means the site owner has invested in security infrastructure. We weren't able to run an automated GEO audit, but we can still help improve its AI search visibility.</p>
+        </div>
+      </div>
+      <div>
+        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">How HogTron Solutions Can Help</h3>
+        <div id="blockedServicesGrid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+      </div>
+      <div class="flex justify-center pt-2">
+        <button id="blockedReportBtn"
+          class="inline-flex items-center gap-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-8 py-3.5 rounded-xl transition-all text-sm shadow-lg">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+          </svg>
+          Download Outreach Summary (PDF)
+        </button>
+      </div>
+    </section>
+
     <!-- Error -->
     <section id="errorBox" class="hidden mb-8">
       <div class="bg-red-950/50 border border-red-800 text-red-300 rounded-2xl p-5 flex gap-3 items-start">
@@ -300,7 +329,15 @@ async function runAudit() {
     });
     const data = await resp.json();
     clearInterval(ticker);
-    if (!resp.ok) { showError(data.error || "Unknown error"); return; }
+    if (!resp.ok) {
+      const msg = data.error || "Unknown error";
+      if (msg.includes("blocking automated access")) {
+        showBlockedSite(url);
+      } else {
+        showError(msg);
+      }
+      return;
+    }
     renderResults(data);
   } catch (e) {
     clearInterval(ticker);
@@ -315,6 +352,171 @@ function showError(msg) {
   hide("loading");
   setEl("errorMsg", msg);
   show("errorBox");
+}
+
+function showBlockedSite(url) {
+  hide("results");
+  hide("errorBox");
+  document.getElementById("blockedUrl").textContent = url;
+
+  const grid = document.getElementById("blockedServicesGrid");
+  grid.innerHTML = "";
+  for (const s of Object.values(SERVICES)) {
+    const card = document.createElement("div");
+    card.className = "bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col gap-3";
+    card.innerHTML = `
+      <div>
+        <p class="text-xs font-bold uppercase tracking-widest text-amber-400 mb-1">${s.category}</p>
+        <p class="text-sm font-bold text-white">${s.name}</p>
+      </div>
+      <p class="text-xs text-slate-400 italic">${s.problem}</p>
+      <div>
+        <p class="text-xs font-bold uppercase tracking-wider text-brand-500 mb-1.5">How We Fix It</p>
+        <p class="text-xs text-slate-300">${s.fix}</p>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+
+  document.getElementById("blockedReportBtn").onclick = () => downloadBlockedReport(url);
+  show("blockedBox");
+  document.getElementById("blockedBox").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function downloadBlockedReport(url) {
+  const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const serviceCards = Object.values(SERVICES).map(s => `
+    <div class="service-card">
+      <div class="service-category">${s.category}</div>
+      <div class="service-name">${s.name}</div>
+      <p class="service-problem"><em>${s.problem}</em></p>
+      <div class="service-fix-label">HOW WE FIX IT</div>
+      <p class="service-fix">${s.fix}</p>
+    </div>`).join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>GEO Outreach Summary — ${url}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; color: #E0F4FF; background: #0D2845; font-size: 13px; line-height: 1.6; }
+  .page-header { display: flex; justify-content: space-between; align-items: center; padding: 28px 40px 20px; border-bottom: 2px solid rgba(0,212,255,0.2); }
+  .logo-block { display: flex; align-items: center; gap: 10px; }
+  .logo-h { width: 40px; height: 40px; background: #112236; border: 1px solid rgba(0,212,255,0.3); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .logo-h span { color: #00D4FF; font-weight: 800; font-size: 20px; }
+  .logo-text .brand { font-weight: 800; font-size: 15px; color: #E0F4FF; letter-spacing: 2px; }
+  .logo-text .sub { font-size: 10px; font-weight: 600; color: #c9a84c; letter-spacing: 3px; }
+  .report-title-block { text-align: right; }
+  .report-title-block h1 { font-size: 22px; font-weight: 800; color: #E0F4FF; letter-spacing: 1px; }
+  .report-title-block .report-sub { font-size: 11px; color: #B8D4E8; margin-top: 2px; }
+
+  .congrats-box { margin: 28px 40px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 12px; padding: 24px 28px; }
+  .congrats-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #10b981; margin-bottom: 8px; }
+  .congrats-title { font-size: 18px; font-weight: 800; color: #E0F4FF; margin-bottom: 10px; }
+  .congrats-body { font-size: 13px; color: #B8D4E8; line-height: 1.7; }
+  .congrats-url { font-size: 12px; color: #00D4FF; margin-top: 8px; font-weight: 600; }
+
+  .section-header { margin: 28px 40px 16px; border-left: 4px solid #00D4FF; padding-left: 12px; }
+  .section-header h2 { font-size: 15px; font-weight: 800; color: #E0F4FF; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .services-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 0 40px 28px; }
+  .service-card { border: 1px solid rgba(0,212,255,0.15); border-radius: 8px; padding: 14px; page-break-inside: avoid; background: #112236; }
+  .service-category { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #c9a84c; margin-bottom: 4px; }
+  .service-name { font-size: 13px; font-weight: 700; color: #E0F4FF; margin-bottom: 6px; }
+  .service-problem { font-size: 11px; color: #B8D4E8; margin-bottom: 8px; }
+  .service-fix-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #00D4FF; border-left: 3px solid #00D4FF; padding-left: 6px; margin-bottom: 4px; }
+  .service-fix { font-size: 11px; color: #B8D4E8; padding-left: 9px; border-left: 3px solid rgba(0,212,255,0.2); }
+
+  .cta-box { margin: 0 40px 32px; background: rgba(0,212,255,0.08); border-left: 4px solid #00D4FF; border-radius: 0 8px 8px 0; padding: 16px 20px; }
+  .cta-label { font-size: 10px; font-weight: 700; color: #00D4FF; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; }
+  .cta-text { font-size: 13px; color: #E0F4FF; font-weight: 500; }
+
+  .page-footer { margin-top: 32px; padding: 16px 40px; border-top: 1px solid rgba(0,212,255,0.15); display: flex; justify-content: space-between; align-items: center; }
+  .footer-brand { font-size: 11px; font-weight: 700; color: #00D4FF; letter-spacing: 1px; }
+  .footer-contact { font-size: 11px; color: #B8D4E8; }
+  .footer-note { font-size: 10px; color: #B8D4E8; margin-top: 8px; text-align: center; opacity: 0.7; }
+
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff; color: #1e293b; }
+    .page-header { border-bottom-color: #e2e8f0; }
+    .logo-h { background: #0D2845; border-color: #0D2845; }
+    .logo-text .brand { color: #0D2845; }
+    .report-title-block h1 { color: #0D2845; }
+    .report-title-block .report-sub { color: #64748b; }
+    .congrats-box { background: #f0fdf4; border-color: #bbf7d0; }
+    .congrats-badge { color: #059669; }
+    .congrats-title { color: #0D2845; }
+    .congrats-body { color: #475569; }
+    .congrats-url { color: #0891b2; }
+    .section-header { border-left-color: #0891b2; }
+    .section-header h2 { color: #0D2845; }
+    .service-card { background: #fff; border-color: #e2e8f0; page-break-inside: avoid; }
+    .service-name { color: #0D2845; }
+    .service-problem { color: #64748b; }
+    .service-fix-label { color: #0891b2; border-left-color: #0891b2; }
+    .service-fix { color: #475569; border-left-color: #e2e8f0; }
+    .cta-box { background: #eff6ff; border-left-color: #0891b2; }
+    .cta-label { color: #0891b2; }
+    .cta-text { color: #1e293b; }
+    .page-footer { border-top-color: #e2e8f0; }
+    .footer-brand { color: #0D2845; }
+    .footer-contact { color: #64748b; }
+  }
+</style>
+</head>
+<body>
+<div class="page-header">
+  <div class="logo-block">
+    <div class="logo-h"><span>H</span></div>
+    <div class="logo-text">
+      <div class="brand">HOGTRON</div>
+      <div class="sub">SOLUTIONS</div>
+    </div>
+  </div>
+  <div class="report-title-block">
+    <h1>GEO OUTREACH SUMMARY</h1>
+    <div class="report-sub">${today} &nbsp;·&nbsp; AI Search Optimization Analysis</div>
+  </div>
+</div>
+
+<div class="congrats-box">
+  <div class="congrats-badge">✓ Security Finding</div>
+  <div class="congrats-title">Great news — your site has bot protection enabled.</div>
+  <div class="congrats-body">
+    When we ran our automated GEO audit on your website, we discovered that it's protected against automated scraping and bot access. This is a genuinely positive sign — it means your site has security measures in place that many businesses overlook.<br/><br/>
+    However, this same protection can sometimes limit visibility with AI search engines like ChatGPT, Perplexity, and Google AI Overviews, which rely on crawling your content to surface your business in answers. The good news is there are targeted strategies to improve your AI search presence without compromising your security setup.
+  </div>
+  <div class="congrats-url">${url}</div>
+</div>
+
+<div class="section-header"><h2>How HogTron Solutions Can Help</h2></div>
+<div class="services-grid">${serviceCards}</div>
+
+<div class="cta-box">
+  <div class="cta-label">Next Step</div>
+  <div class="cta-text">Let's schedule a 20-minute call to walk through which of these tools will have the biggest impact on your AI search visibility — no commitment required.</div>
+</div>
+
+<div class="page-footer">
+  <div>
+    <div class="footer-brand">HOGTRON SOLUTIONS</div>
+    <div class="footer-contact">hello@hogtronsolutions.com &nbsp;·&nbsp; (610) 663-0462 &nbsp;·&nbsp; seanbilger.xyz</div>
+  </div>
+  <div style="text-align:right;font-size:11px;color:#B8D4E8;">
+    Prepared by Sean Bilger<br>Freelance Software Developer & Project Manager
+  </div>
+</div>
+<div class="footer-note">All systems are custom-built for your specific business needs. Let's discuss which tool will save you the most time today.</div>
+<script>window.onload = () => window.print();<\/script>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  win.document.write(html);
+  win.document.close();
 }
 
 let lastAuditData = null;
