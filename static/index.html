@@ -190,6 +190,12 @@
         <div id="pillarsGrid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
       </div>
 
+      <!-- Recommended Services -->
+      <div>
+        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Recommended Next Steps</h3>
+        <div id="servicesGrid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+      </div>
+
       <!-- Download Report -->
       <div class="flex justify-center pt-4">
         <button onclick="downloadReport()"
@@ -376,6 +382,28 @@ function renderResults({ meta, audit }) {
       </div>
     `;
     grid.appendChild(card);
+  }
+
+  // Services
+  const sorted = Object.entries(audit.pillars).sort((a, b) => a[1].score - b[1].score);
+  const topServices = sorted.slice(0, 3).map(([key]) => SERVICES[key]);
+  const servicesGrid = document.getElementById("servicesGrid");
+  servicesGrid.innerHTML = "";
+  for (const s of topServices) {
+    const card = document.createElement("div");
+    card.className = "bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col gap-3";
+    card.innerHTML = `
+      <div>
+        <p class="text-xs font-bold uppercase tracking-widest text-amber-400 mb-1">${s.category}</p>
+        <p class="text-sm font-bold text-white">${s.name}</p>
+      </div>
+      <p class="text-xs text-slate-400 italic">${s.problem}</p>
+      <div>
+        <p class="text-xs font-bold uppercase tracking-wider text-brand-500 mb-1.5">How We Fix It</p>
+        <p class="text-xs text-slate-300">${s.fix}</p>
+      </div>
+    `;
+    servicesGrid.appendChild(card);
   }
 
   show("results");
