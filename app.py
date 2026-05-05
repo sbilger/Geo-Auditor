@@ -232,6 +232,7 @@ def analyze_with_llm(scraped: dict) -> dict:
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": 2000,
         "temperature": 0.2,
+        "response_format": {"type": "json_object"},
     }
 
     last_json_error = None
