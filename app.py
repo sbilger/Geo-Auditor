@@ -18,7 +18,17 @@ HEADERS = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
-    )
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
 }
 
 # ---------------------------------------------------------------------------
@@ -26,8 +36,22 @@ HEADERS = {
 # ---------------------------------------------------------------------------
 
 def scrape_page(url: str) -> dict:
-    resp = requests.get(url, headers=HEADERS, timeout=15)
-    resp.raise_for_status()
+    import time
+    session = requests.Session()
+    session.headers.update(HEADERS)
+
+    for attempt in range(3):
+        resp = session.get(url, timeout=15, allow_redirects=True)
+        if resp.status_code == 429:
+            if attempt < 2:
+                time.sleep(4 * (attempt + 1))
+                continue
+            raise requests.exceptions.RequestException(
+                "This site is rate-limiting automated requests. "
+                "Wait 30 seconds and try again, or the site may block scrapers entirely."
+            )
+        resp.raise_for_status()
+        break
     soup = BeautifulSoup(resp.text, "html.parser")
 
     title = soup.title.string.strip() if soup.title else ""
