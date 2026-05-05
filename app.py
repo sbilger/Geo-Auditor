@@ -500,10 +500,10 @@ def analyze_with_gemini(scraped: dict) -> dict:
 
 
 def run_audit_with_fallbacks(scraped: dict):
-    """Try LLM providers in order: xAI → Gemini → synthetic.
+    """Try LLM providers in order: Groq → Gemini → synthetic.
     Returns either an audit dict, or a (jsonify_response, status_code) tuple on hard failure."""
     providers = [
-        ("xAI", XAI_API_KEY, analyze_with_xai),
+        ("Groq", GROQ_API_KEY, analyze_with_llm),
         ("Gemini", GEMINI_API_KEY, analyze_with_gemini),
     ]
 
@@ -586,8 +586,8 @@ def index():
 
 @app.route("/api/audit", methods=["POST"])
 def audit():
-    if not (XAI_API_KEY or GEMINI_API_KEY):
-        return jsonify({"error": "No LLM API key configured. Set XAI_API_KEY or GEMINI_API_KEY in Render."}), 503
+    if not (GROQ_API_KEY or GEMINI_API_KEY):
+        return jsonify({"error": "No LLM API key configured. Set GROQ_API_KEY or GEMINI_API_KEY in Render."}), 503
 
     body = request.get_json(force=True)
     url = (body.get("url") or "").strip()
