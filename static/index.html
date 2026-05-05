@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GEO Auditor — AI Search Optimization Analyzer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50:'#f0f4ff', 100:'#dce8ff', 500:'#4f7fff', 600:'#3b6ef0', 700:'#2a5de0' },
+          },
+          fontFamily: { sans: ['Inter','ui-sans-serif','system-ui'] }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    .ring-grade { box-shadow: 0 0 0 3px currentColor; }
+    .score-ring { stroke-dasharray: 251.2; transition: stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1); }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    .fade-up { animation: fadeUp .45s ease both; }
+    .pillar-card { animation-fill-mode: both; }
+    .pillar-card:nth-child(1) { animation-delay: .05s; }
+    .pillar-card:nth-child(2) { animation-delay: .12s; }
+    .pillar-card:nth-child(3) { animation-delay: .19s; }
+    .pillar-card:nth-child(4) { animation-delay: .26s; }
+    .pillar-card:nth-child(5) { animation-delay: .33s; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-950/90 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center text-white font-bold text-sm">G</div>
+        <span class="font-bold text-lg tracking-tight">GEO Auditor</span>
+        <span class="hidden sm:inline text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">Beta</span>
+      </div>
+      <p class="text-xs text-slate-500 hidden sm:block">Powered by Claude AI</p>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-6 py-12">
+
+    <!-- Hero -->
+    <section class="text-center mb-12">
+      <div class="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/30 text-brand-500 text-xs font-semibold px-3 py-1.5 rounded-full mb-4">
+        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+        Generative Engine Optimization
+      </div>
+      <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
+        Is your website<br />
+        <span class="text-brand-500">AI search–ready?</span>
+      </h1>
+      <p class="text-slate-400 text-lg max-w-xl mx-auto">
+        Paste any local business URL and get an instant audit across the 5 pillars that determine whether AI engines like ChatGPT, Perplexity, and Google AI Overviews will cite your business.
+      </p>
+    </section>
+
+    <!-- Input -->
+    <section class="mb-10">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+        <div class="flex gap-3 flex-col sm:flex-row">
+          <div class="flex-1 relative">
+            <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+              <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+              </svg>
+            </div>
+            <input
+              id="urlInput"
+              type="url"
+              placeholder="https://yourbusiness.com"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-11 pr-4 py-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition"
+            />
+          </div>
+          <button
+            id="auditBtn"
+            onclick="runAudit()"
+            class="bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-semibold px-7 py-3.5 rounded-xl transition-all text-sm whitespace-nowrap shadow-lg shadow-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Run GEO Audit
+          </button>
+        </div>
+        <p class="text-xs text-slate-600 mt-3">Works best on local business sites: restaurants, law firms, contractors, healthcare, retail.</p>
+      </div>
+    </section>
+
+    <!-- Loading -->
+    <section id="loading" class="hidden text-center py-16">
+      <div class="inline-flex flex-col items-center gap-4">
+        <div class="relative w-16 h-16">
+          <svg class="animate-spin w-16 h-16 text-brand-500" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"/>
+            <path class="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-slate-300 font-semibold" id="loadingMsg">Scraping website…</p>
+          <p class="text-slate-500 text-sm mt-1">Analyzing with Claude AI — usually 10–20 seconds</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Error -->
+    <section id="errorBox" class="hidden mb-8">
+      <div class="bg-red-950/50 border border-red-800 text-red-300 rounded-2xl p-5 flex gap-3 items-start">
+        <svg class="w-5 h-5 mt-0.5 shrink-0 text-red-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+        <div>
+          <p class="font-semibold text-sm">Audit Failed</p>
+          <p class="text-sm mt-0.5 text-red-400" id="errorMsg"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results -->
+    <section id="results" class="hidden space-y-8 fade-up">
+
+      <!-- Overall score + verdict -->
+      <div id="overallCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-8 flex flex-col sm:flex-row items-center gap-8">
+        <!-- Donut -->
+        <div class="relative shrink-0 w-36 h-36">
+          <svg class="w-36 h-36 -rotate-90" viewBox="0 0 90 90">
+            <circle cx="45" cy="45" r="40" fill="none" stroke="#1e293b" stroke-width="8"/>
+            <circle id="scoreCircle" cx="45" cy="45" r="40" fill="none" stroke="#4f7fff" stroke-width="8"
+              stroke-linecap="round" class="score-ring" style="stroke-dashoffset:251.2"/>
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span id="overallScore" class="text-4xl font-extrabold text-white">—</span>
+            <span id="overallGrade" class="text-sm font-bold text-brand-500"></span>
+          </div>
+        </div>
+        <!-- Info -->
+        <div class="flex-1 text-center sm:text-left">
+          <p class="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">GEO Overall Score</p>
+          <h2 class="text-2xl font-bold text-white mb-2" id="pageTitle">—</h2>
+          <p class="text-slate-400 text-sm mb-4" id="pageUrl"></p>
+          <div class="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-sm px-4 py-2 rounded-xl">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span id="verdict"></span>
+          </div>
+        </div>
+        <!-- Quick stats -->
+        <div class="shrink-0 grid grid-cols-2 gap-3 text-center">
+          <div class="bg-slate-800 rounded-xl px-4 py-3">
+            <p class="text-xs text-slate-500 mb-0.5">Words</p>
+            <p class="font-bold text-white" id="statWords">—</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl px-4 py-3">
+            <p class="text-xs text-slate-500 mb-0.5">Schema</p>
+            <p class="font-bold" id="statSchema">—</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl px-4 py-3">
+            <p class="text-xs text-slate-500 mb-0.5">FAQ</p>
+            <p class="font-bold" id="statFaq">—</p>
+          </div>
+          <div class="bg-slate-800 rounded-xl px-4 py-3">
+            <p class="text-xs text-slate-500 mb-0.5">Business</p>
+            <p class="font-bold text-slate-300 text-xs leading-tight" id="statBiz">—</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Priority action -->
+      <div class="bg-brand-500/10 border border-brand-500/30 rounded-2xl p-6 flex gap-4 items-start">
+        <div class="w-9 h-9 rounded-lg bg-brand-500 flex items-center justify-center shrink-0 mt-0.5">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-xs text-brand-500 font-bold uppercase tracking-wider mb-1">Priority Action This Week</p>
+          <p class="text-slate-100 font-medium" id="priorityAction"></p>
+        </div>
+      </div>
+
+      <!-- Pillar cards -->
+      <div>
+        <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">The 5 GEO Pillars</h3>
+        <div id="pillarsGrid" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+      </div>
+
+      <!-- Download Report -->
+      <div class="flex justify-center pt-4">
+        <button onclick="downloadReport()"
+          class="inline-flex items-center gap-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-semibold px-8 py-3.5 rounded-xl transition-all text-sm shadow-lg">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+          </svg>
+          Download Client Report (PDF)
+        </button>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800 mt-20 py-8 text-center text-xs text-slate-600">
+    GEO Auditor &mdash; Built with Claude AI &mdash; For demonstration purposes
+  </footer>
+
+<script>
+const PILLAR_META = {
+  conversational_clarity: {
+    label: "Conversational Clarity",
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>`,
+    color: "blue",
+  },
+  entity_density: {
+    label: "Entity Density",
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>`,
+    color: "emerald",
+  },
+  direct_answer_formatting: {
+    label: "Direct-Answer Format",
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h10"/>`,
+    color: "violet",
+  },
+  citation_worthiness: {
+    label: "Citation Worthiness",
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>`,
+    color: "amber",
+  },
+  schema_and_structure: {
+    label: "Schema & Structure",
+    icon: `<path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>`,
+    color: "rose",
+  },
+};
+
+const COLOR_MAP = {
+  blue:    { bg:"bg-blue-500/10",    border:"border-blue-500/30",   text:"text-blue-400",   bar:"bg-blue-500"    },
+  emerald: { bg:"bg-emerald-500/10", border:"border-emerald-500/30",text:"text-emerald-400",bar:"bg-emerald-500" },
+  violet:  { bg:"bg-violet-500/10",  border:"border-violet-500/30", text:"text-violet-400", bar:"bg-violet-500"  },
+  amber:   { bg:"bg-amber-500/10",   border:"border-amber-500/30",  text:"text-amber-400",  bar:"bg-amber-500"   },
+  rose:    { bg:"bg-rose-500/10",    border:"border-rose-500/30",   text:"text-rose-400",   bar:"bg-rose-500"    },
+};
+
+function gradeColor(grade) {
+  const g = (grade || "F")[0];
+  if (g === "A") return "text-emerald-400";
+  if (g === "B") return "text-blue-400";
+  if (g === "C") return "text-amber-400";
+  if (g === "D") return "text-orange-400";
+  return "text-red-400";
+}
+
+function setEl(id, val) { document.getElementById(id).textContent = val; }
+function show(id) { document.getElementById(id).classList.remove("hidden"); }
+function hide(id) { document.getElementById(id).classList.add("hidden"); }
+
+async function runAudit() {
+  const url = document.getElementById("urlInput").value.trim();
+  if (!url) { showError("Please enter a URL."); return; }
+
+  hide("results");
+  hide("errorBox");
+  show("loading");
+  document.getElementById("auditBtn").disabled = true;
+
+  const msgs = ["Scraping website…", "Parsing content…", "Analyzing with Claude…", "Scoring GEO pillars…"];
+  let mi = 0;
+  const ticker = setInterval(() => {
+    mi = (mi + 1) % msgs.length;
+    document.getElementById("loadingMsg").textContent = msgs[mi];
+  }, 3500);
+
+  try {
+    const resp = await fetch("/api/audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const data = await resp.json();
+    clearInterval(ticker);
+    if (!resp.ok) { showError(data.error || "Unknown error"); return; }
+    renderResults(data);
+  } catch (e) {
+    clearInterval(ticker);
+    showError("Network error — is the server running?");
+  } finally {
+    hide("loading");
+    document.getElementById("auditBtn").disabled = false;
+  }
+}
+
+function showError(msg) {
+  hide("loading");
+  setEl("errorMsg", msg);
+  show("errorBox");
+}
+
+let lastAuditData = null;
+
+function renderResults({ meta, audit }) {
+  lastAuditData = { meta, audit };
+  // Overall
+  setEl("overallScore", audit.overall_score);
+  const gradeEl = document.getElementById("overallGrade");
+  gradeEl.textContent = audit.overall_grade;
+  gradeEl.className = `text-sm font-bold ${gradeColor(audit.overall_grade)}`;
+
+  // Donut animation
+  const offset = 251.2 - (audit.overall_score / 100) * 251.2;
+  const scoreColor = audit.overall_score >= 75 ? "#10b981" : audit.overall_score >= 60 ? "#4f7fff" : audit.overall_score >= 45 ? "#f59e0b" : "#f43f5e";
+  const circle = document.getElementById("scoreCircle");
+  circle.style.strokeDashoffset = offset;
+  circle.style.stroke = scoreColor;
+
+  setEl("pageTitle", meta.title || meta.url);
+  const urlEl = document.getElementById("pageUrl");
+  urlEl.textContent = meta.url;
+
+  setEl("verdict", audit.one_line_verdict);
+  setEl("priorityAction", audit.priority_action);
+
+  // Stats
+  setEl("statWords", meta.word_count.toLocaleString());
+  const schemaEl = document.getElementById("statSchema");
+  schemaEl.textContent = meta.has_schema ? "Yes ✓" : "None";
+  schemaEl.className = `font-bold ${meta.has_schema ? "text-emerald-400" : "text-red-400"}`;
+  const faqEl = document.getElementById("statFaq");
+  faqEl.textContent = meta.has_faq ? "Yes ✓" : "No";
+  faqEl.className = `font-bold ${meta.has_faq ? "text-emerald-400" : "text-red-400"}`;
+  setEl("statBiz", audit.business_type_detected || "—");
+
+  // Pillars
+  const grid = document.getElementById("pillarsGrid");
+  grid.innerHTML = "";
+  for (const [key, meta2] of Object.entries(PILLAR_META)) {
+    const pillar = audit.pillars[key];
+    if (!pillar) continue;
+    const c = COLOR_MAP[meta2.color];
+    const card = document.createElement("div");
+    card.className = `pillar-card fade-up bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col gap-4`;
+
+    const issues = (pillar.top_issues || []).map(i => `<li class="flex gap-2 items-start"><span class="text-red-400 mt-0.5 shrink-0">✗</span><span>${i}</span></li>`).join("");
+    const wins = (pillar.quick_wins || []).map(w => `<li class="flex gap-2 items-start"><span class="text-emerald-400 mt-0.5 shrink-0">✓</span><span>${w}</span></li>`).join("");
+
+    card.innerHTML = `
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg ${c.bg} border ${c.border} flex items-center justify-center">
+            <svg class="w-4 h-4 ${c.text}" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">${meta2.icon}</svg>
+          </div>
+          <span class="text-sm font-semibold text-slate-200">${meta2.label}</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="text-xl font-extrabold text-white">${pillar.score}</span>
+          <span class="text-xs font-bold ${gradeColor(pillar.grade)} bg-slate-800 px-1.5 py-0.5 rounded">${pillar.grade}</span>
+        </div>
+      </div>
+      <!-- Score bar -->
+      <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+        <div class="${c.bar} h-full rounded-full transition-all duration-700" style="width:${pillar.score}%"></div>
+      </div>
+      <p class="text-xs text-slate-400">${pillar.summary}</p>
+      <div>
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Issues Found</p>
+        <ul class="space-y-1 text-xs text-slate-400">${issues}</ul>
+      </div>
+      <div>
+        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Quick Wins</p>
+        <ul class="space-y-1 text-xs text-slate-300">${wins}</ul>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+
+  show("results");
+  document.getElementById("results").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// Allow Enter key to submit
+document.getElementById("urlInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") runAudit();
+});
+
+// ---------------------------------------------------------------------------
+// Report generation
+// ---------------------------------------------------------------------------
+
+const SERVICES = {
+  conversational_clarity: {
+    name: "24/7 Web Concierge",
+    category: "Lead Capture",
+    problem: "Website visitors have quick questions and leave if they can't find answers fast enough.",
+    fix: "We install a smart chat widget that captures their contact info and texts answers directly to their phone, securing the lead before they leave your site."
+  },
+  entity_density: {
+    name: "Plain-English Analytics",
+    category: "Sales & Insights",
+    problem: "It's hard to know exactly which parts of your online presence are driving real local customers.",
+    fix: "We translate your complex website data into plain-English weekly reports — simple summaries like \"Your listing brought in 20 local visitors this week.\""
+  },
+  direct_answer_formatting: {
+    name: "Social-to-Blog Engine",
+    category: "Visibility & SEO",
+    problem: "You post great content on social media, but those posts disappear in 24 hours and don't help you rank on Google or get cited by AI.",
+    fix: "Whenever you post a video, our system listens to the audio and automatically writes a perfectly structured, AI-friendly blog post for your website."
+  },
+  citation_worthiness: {
+    name: "Smart Review Responder",
+    category: "Visibility & SEO",
+    problem: "Replying to every Google review helps your SEO and AI visibility, but writing unique responses to each one is incredibly tedious.",
+    fix: "We install an AI trained specifically on your business that drafts highly personalized, natural-sounding responses to every review — boosting your ranking hands-free."
+  },
+  schema_and_structure: {
+    name: "Brand Consistency Monitor",
+    category: "Visibility & SEO",
+    problem: "Inconsistent business information across the web confuses both Google and AI engines, suppressing your visibility in local results.",
+    fix: "We audit and align your business data across every major platform, then deploy monitoring so your name, address, and hours stay consistent automatically."
+  }
+};
+
+const PILLAR_LABELS = {
+  conversational_clarity: "Conversational Clarity",
+  entity_density: "Entity Density",
+  direct_answer_formatting: "Direct-Answer Format",
+  citation_worthiness: "Citation Worthiness",
+  schema_and_structure: "Schema & Structure"
+};
+
+function gradeColorHex(grade) {
+  const g = (grade || "F")[0];
+  if (g === "A") return "#10b981";
+  if (g === "B") return "#4f7fff";
+  if (g === "C") return "#f59e0b";
+  if (g === "D") return "#f97316";
+  return "#ef4444";
+}
+
+function scoreStatus(score) {
+  if (score >= 75) return { label: "GOOD STANDING", color: "#10b981" };
+  if (score >= 60) return { label: "NEEDS IMPROVEMENT", color: "#f59e0b" };
+  if (score >= 45) return { label: "UNDERPERFORMING", color: "#f97316" };
+  return { label: "CRITICAL", color: "#ef4444" };
+}
+
+function downloadReport() {
+  if (!lastAuditData) return;
+  const { meta, audit } = lastAuditData;
+
+  // Pick the 3 lowest-scoring pillars for service recommendations
+  const sorted = Object.entries(audit.pillars).sort((a, b) => a[1].score - b[1].score);
+  const topServices = sorted.slice(0, 3).map(([key]) => SERVICES[key]);
+
+  const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const status = scoreStatus(audit.overall_score);
+
+  const pillarRows = Object.entries(audit.pillars).map(([key, p]) => {
+    const issues = (p.top_issues || []).map(i => `<li>${i}</li>`).join("");
+    const wins = (p.quick_wins || []).map(w => `<li>${w}</li>`).join("");
+    return `
+      <div class="pillar-block">
+        <div class="pillar-header">
+          <span class="pillar-name">${PILLAR_LABELS[key]}</span>
+          <span class="pillar-score" style="color:${gradeColorHex(p.grade)}">${p.score}/100 &nbsp;<span class="grade-badge" style="background:${gradeColorHex(p.grade)}">${p.grade}</span></span>
+        </div>
+        <div class="score-bar-bg"><div class="score-bar-fill" style="width:${p.score}%;background:${gradeColorHex(p.grade)}"></div></div>
+        <p class="pillar-summary">${p.summary}</p>
+        <div class="two-col">
+          <div>
+            <p class="col-label issues-label">Issues Found</p>
+            <ul class="item-list issues-list">${issues}</ul>
+          </div>
+          <div>
+            <p class="col-label wins-label">Quick Wins</p>
+            <ul class="item-list wins-list">${wins}</ul>
+          </div>
+        </div>
+      </div>`;
+  }).join("");
+
+  const serviceCards = topServices.map(s => `
+    <div class="service-card">
+      <div class="service-category">${s.category}</div>
+      <div class="service-name">${s.name}</div>
+      <p class="service-problem"><em>${s.problem}</em></p>
+      <div class="service-fix-label">HOW WE FIX IT</div>
+      <p class="service-fix">${s.fix}</p>
+    </div>`).join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>GEO Audit Report — ${meta.title || meta.url}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; color: #1e293b; background: #fff; font-size: 13px; line-height: 1.6; }
+
+  /* PAGE HEADER */
+  .page-header { display: flex; justify-content: space-between; align-items: center; padding: 28px 40px 20px; border-bottom: 2px solid #e2e8f0; }
+  .logo-block { display: flex; align-items: center; gap: 10px; }
+  .logo-h { width: 40px; height: 40px; background: #0f172a; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .logo-h span { color: #fff; font-weight: 800; font-size: 20px; }
+  .logo-text { line-height: 1.1; }
+  .logo-text .brand { font-weight: 800; font-size: 15px; color: #0f172a; letter-spacing: 2px; }
+  .logo-text .sub { font-size: 10px; font-weight: 600; color: #c9a84c; letter-spacing: 3px; }
+  .report-title-block { text-align: right; }
+  .report-title-block h1 { font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: 1px; }
+  .report-title-block .report-sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+  /* META TABLE */
+  .meta-table { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 0 40px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-top: 20px; }
+  .meta-row { display: flex; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #f1f5f9; }
+  .meta-row:nth-child(odd) { background: #f8fafc; }
+  .meta-row:last-child, .meta-row:nth-last-child(2):nth-child(odd) { border-bottom: none; }
+  .meta-label { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; width: 64px; flex-shrink: 0; padding-top: 2px; }
+  .meta-value { font-weight: 600; color: #1e293b; font-size: 12px; }
+
+  /* SCORE HERO */
+  .score-hero { display: flex; align-items: center; gap: 24px; margin: 24px 40px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px 24px; }
+  .score-number { font-size: 56px; font-weight: 800; color: #0f172a; line-height: 1; }
+  .score-denom { font-size: 22px; font-weight: 400; color: #94a3b8; }
+  .score-info { flex: 1; }
+  .score-status { font-size: 13px; font-weight: 800; letter-spacing: 1px; margin-bottom: 4px; }
+  .score-verdict { font-size: 13px; color: #475569; margin-top: 6px; }
+  .score-stats { display: flex; gap: 16px; margin-top: 10px; }
+  .stat-chip { background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; font-size: 11px; }
+  .stat-chip .stat-label { color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-chip .stat-val { font-weight: 700; color: #1e293b; margin-top: 1px; }
+
+  /* PRIORITY ACTION */
+  .priority-box { margin: 0 40px 24px; background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 0 8px 8px 0; padding: 14px 18px; }
+  .priority-label { font-size: 10px; font-weight: 700; color: #3b82f6; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; }
+  .priority-text { font-size: 13px; font-weight: 600; color: #1e293b; }
+
+  /* SECTION HEADERS */
+  .section-header { margin: 28px 40px 16px; border-left: 4px solid #3b82f6; padding-left: 12px; }
+  .section-header h2 { font-size: 15px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* PILLAR BLOCKS */
+  .pillar-block { margin: 0 40px 16px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; page-break-inside: avoid; }
+  .pillar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .pillar-name { font-weight: 700; font-size: 13px; color: #0f172a; }
+  .pillar-score { font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+  .grade-badge { display: inline-block; color: #fff; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; }
+  .score-bar-bg { height: 5px; background: #f1f5f9; border-radius: 99px; margin-bottom: 10px; overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 99px; }
+  .pillar-summary { font-size: 12px; color: #475569; margin-bottom: 12px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .col-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+  .issues-label { color: #ef4444; }
+  .wins-label { color: #10b981; }
+  .item-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .issues-list li { font-size: 11px; color: #475569; padding-left: 14px; position: relative; }
+  .issues-list li::before { content: "✗"; position: absolute; left: 0; color: #ef4444; font-weight: 700; }
+  .wins-list li { font-size: 11px; color: #475569; padding-left: 14px; position: relative; }
+  .wins-list li::before { content: "✓"; position: absolute; left: 0; color: #10b981; font-weight: 700; }
+
+  /* SERVICES */
+  .services-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 0 40px 28px; }
+  .service-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; page-break-inside: avoid; }
+  .service-category { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #c9a84c; margin-bottom: 4px; }
+  .service-name { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 6px; }
+  .service-problem { font-size: 11px; color: #64748b; margin-bottom: 8px; font-style: italic; }
+  .service-fix-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #3b82f6; border-left: 3px solid #3b82f6; padding-left: 6px; margin-bottom: 4px; }
+  .service-fix { font-size: 11px; color: #475569; padding-left: 9px; border-left: 3px solid #e2e8f0; }
+
+  /* FOOTER */
+  .page-footer { margin-top: 32px; padding: 16px 40px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+  .footer-brand { font-size: 11px; font-weight: 700; color: #0f172a; letter-spacing: 1px; }
+  .footer-contact { font-size: 11px; color: #64748b; }
+  .footer-note { font-size: 10px; color: #94a3b8; margin-top: 8px; text-align: center; }
+
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .pillar-block, .service-card { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="page-header">
+  <div class="logo-block">
+    <div class="logo-h"><span>H</span></div>
+    <div class="logo-text">
+      <div class="brand">HOGTRON</div>
+      <div class="sub">SOLUTIONS</div>
+    </div>
+  </div>
+  <div class="report-title-block">
+    <h1>GEO AUDIT REPORT</h1>
+    <div class="report-sub">${today} &nbsp;·&nbsp; AI Search Optimization Analysis</div>
+  </div>
+</div>
+
+<!-- META TABLE -->
+<div class="meta-table">
+  <div class="meta-row"><span class="meta-label">Client</span><span class="meta-value">${meta.title || meta.url}</span></div>
+  <div class="meta-row"><span class="meta-label">Auditor</span><span class="meta-value">HogTron Solutions</span></div>
+  <div class="meta-row"><span class="meta-label">URL</span><span class="meta-value">${meta.url}</span></div>
+  <div class="meta-row"><span class="meta-label">Contact</span><span class="meta-value">hello@hogtronsolutions.com</span></div>
+  <div class="meta-row"><span class="meta-label">Scope</span><span class="meta-value">AI Search Engine Optimization (GEO)</span></div>
+  <div class="meta-row"><span class="meta-label">Date</span><span class="meta-value">${today}</span></div>
+</div>
+
+<!-- SCORE HERO -->
+<div class="score-hero">
+  <div>
+    <span class="score-number" style="color:${gradeColorHex(audit.overall_grade)}">${audit.overall_score}</span><span class="score-denom">/100</span>
+  </div>
+  <div class="score-info">
+    <div class="score-status" style="color:${status.color}">${status.label}</div>
+    <div style="font-size:12px;color:#64748b;">Business Type: <strong>${audit.business_type_detected || "—"}</strong></div>
+    <div class="score-verdict">${audit.one_line_verdict}</div>
+    <div class="score-stats">
+      <div class="stat-chip"><div class="stat-label">Words</div><div class="stat-val">${meta.word_count}</div></div>
+      <div class="stat-chip"><div class="stat-label">Schema</div><div class="stat-val" style="color:${meta.has_schema ? '#10b981' : '#ef4444'}">${meta.has_schema ? "Present ✓" : "Missing ✗"}</div></div>
+      <div class="stat-chip"><div class="stat-label">FAQ Section</div><div class="stat-val" style="color:${meta.has_faq ? '#10b981' : '#ef4444'}">${meta.has_faq ? "Found ✓" : "None ✗"}</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- PRIORITY ACTION -->
+<div class="priority-box">
+  <div class="priority-label">Priority Action This Week</div>
+  <div class="priority-text">${audit.priority_action}</div>
+</div>
+
+<!-- GEO PILLARS -->
+<div class="section-header"><h2>The 5 GEO Pillars</h2></div>
+${pillarRows}
+
+<!-- RECOMMENDED SERVICES -->
+<div class="section-header" style="margin-top:32px;"><h2>Recommended Next Steps</h2></div>
+<div class="services-grid">${serviceCards}</div>
+
+<!-- FOOTER -->
+<div class="page-footer">
+  <div>
+    <div class="footer-brand">HOGTRON SOLUTIONS</div>
+    <div class="footer-contact">hello@hogtronsolutions.com &nbsp;·&nbsp; (610) 663-0462 &nbsp;·&nbsp; seanbilger.xyz</div>
+  </div>
+  <div style="text-align:right;font-size:11px;color:#94a3b8;">
+    Prepared by Sean Bilger<br>Freelance Software Developer & Project Manager
+  </div>
+</div>
+<div class="footer-note">All systems are custom-built for your specific business needs. Let's discuss which tool will save you the most time today.</div>
+
+<script>window.onload = () => window.print();<\/script>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  win.document.write(html);
+  win.document.close();
+}
+</script>
+
+</body>
+</html>
