@@ -385,14 +385,11 @@ def audit():
     else:
         try:
             analysis = analyze_with_llm(scraped)
-        except (json.JSONDecodeError, ValueError) as e:
-            # Fallback: if LLM repeatedly fails on a sparse page, return a synthetic audit
-            if scraped["word_count"] < 50:
-                analysis = synthetic_audit_for_empty_page(scraped)
-            elif isinstance(e, json.JSONDecodeError):
-                return jsonify({"error": f"The AI returned an unexpected response. Please try again. ({e})"}), 500
-            else:
-                return jsonify({"error": str(e)}), 503
+        except json.JSONDecodeError:
+            # The LLM refused to return JSON 3 times — almost always a JS-rendered page
+            analysis = synthetic_audit_for_empty_page(scraped)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 503
         except requests.exceptions.RequestException as e:
             return jsonify({"error": f"API error: {e}"}), 500
 
