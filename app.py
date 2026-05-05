@@ -26,8 +26,13 @@ HEADERS = {
     "Upgrade-Insecure-Requests": "1",
     "Sec-Fetch-Dest": "document",
     "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-Site": "cross-site",
     "Sec-Fetch-User": "?1",
+    "Sec-CH-UA": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "Sec-CH-UA-Mobile": "?0",
+    "Sec-CH-UA-Platform": '"Windows"',
+    "Referer": "https://www.google.com/",
+    "DNT": "1",
     "Cache-Control": "max-age=0",
 }
 
@@ -37,18 +42,29 @@ HEADERS = {
 
 def scrape_page(url: str) -> dict:
     import time
+    from urllib.parse import urlparse
+
     session = requests.Session()
     session.headers.update(HEADERS)
+
+    # Warm up the session with a HEAD request to establish cookies
+    try:
+        parsed = urlparse(url)
+        root = f"{parsed.scheme}://{parsed.netloc}"
+        session.head(root, timeout=8, allow_redirects=True)
+        time.sleep(1)
+    except Exception:
+        pass
 
     for attempt in range(3):
         resp = session.get(url, timeout=15, allow_redirects=True)
         if resp.status_code == 429:
             if attempt < 2:
-                time.sleep(4 * (attempt + 1))
+                time.sleep(6 * (attempt + 1))
                 continue
             raise requests.exceptions.RequestException(
-                "This site is rate-limiting automated requests. "
-                "Wait 30 seconds and try again, or the site may block scrapers entirely."
+                "This site is blocking automated access. "
+                "It may use JavaScript-based bot protection that requires a real browser."
             )
         resp.raise_for_status()
         break
