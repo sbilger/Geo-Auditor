@@ -244,6 +244,8 @@ def analyze_with_llm(scraped: dict) -> dict:
     raw = resp.json()["choices"][0]["message"]["content"].strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
+    if not raw:
+        raise json.JSONDecodeError("LLM returned an empty response", "", 0)
     return json.loads(raw)
 
 
@@ -273,12 +275,18 @@ def audit():
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Could not fetch the page: {e}"}), 422
 
+    if scraped["word_count"] < 20:
+        return jsonify({"error": (
+            "This page returned almost no readable content — it likely requires JavaScript to render. "
+            "GEO Auditor can only analyze pages that load their text in plain HTML."
+        )}), 422
+
     try:
         analysis = analyze_with_llm(scraped)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 401
     except json.JSONDecodeError as e:
-        return jsonify({"error": f"LLM returned malformed JSON: {e}"}), 500
+        return jsonify({"error": f"The AI returned an unexpected response. Please try again. ({e})"}), 500
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 503
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"API error: {e}"}), 500
 
