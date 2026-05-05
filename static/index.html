@@ -579,8 +579,46 @@ function downloadReport() {
   .footer-note { font-size: 10px; color: #B8D4E8; margin-top: 8px; text-align: center; opacity: 0.7; }
 
   @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .pillar-block, .service-card { page-break-inside: avoid; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background: #fff; color: #1e293b; }
+    .page-header { border-bottom-color: #e2e8f0; }
+    .logo-h { background: #0D2845; border-color: #0D2845; }
+    .logo-h span { color: #00D4FF; }
+    .logo-text .brand { color: #0D2845; }
+    .report-title-block h1 { color: #0D2845; }
+    .report-title-block .report-sub { color: #64748b; }
+    .meta-table { border-color: #e2e8f0; }
+    .meta-row { border-bottom-color: #f1f5f9; }
+    .meta-row:nth-child(odd) { background: #f8fafc; }
+    .meta-row:nth-child(even) { background: #fff; }
+    .meta-label { color: #0891b2; opacity: 1; }
+    .meta-value { color: #1e293b; }
+    .score-hero { background: #f8fafc; border-color: #e2e8f0; }
+    .score-number { color: #0D2845; }
+    .score-denom { color: #94a3b8; }
+    .score-verdict { color: #475569; }
+    .stat-chip { background: #fff; border-color: #e2e8f0; }
+    .stat-chip .stat-label { color: #94a3b8; opacity: 1; }
+    .stat-chip .stat-val { color: #1e293b; }
+    .priority-box { background: #eff6ff; border-left-color: #0891b2; }
+    .priority-label { color: #0891b2; }
+    .priority-text { color: #1e293b; }
+    .section-header { border-left-color: #0891b2; }
+    .section-header h2 { color: #0D2845; }
+    .pillar-block { background: #fff; border-color: #e2e8f0; page-break-inside: avoid; }
+    .pillar-name { color: #0D2845; }
+    .score-bar-bg { background: #f1f5f9; }
+    .pillar-summary { color: #475569; }
+    .issues-list li { color: #475569; }
+    .wins-list li { color: #475569; }
+    .service-card { background: #fff; border-color: #e2e8f0; page-break-inside: avoid; }
+    .service-name { color: #0D2845; }
+    .service-problem { color: #64748b; }
+    .service-fix-label { color: #0891b2; border-left-color: #0891b2; }
+    .service-fix { color: #475569; border-left-color: #e2e8f0; }
+    .page-footer { border-top-color: #e2e8f0; }
+    .footer-brand { color: #0D2845; }
+    .footer-contact { color: #64748b; }
+    .footer-note { color: #94a3b8; opacity: 1; }
   }
 </style>
 </head>
