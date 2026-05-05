@@ -234,6 +234,7 @@ def analyze_with_llm(scraped: dict) -> dict:
         "temperature": 0.2,
     }
 
+    last_json_error = None
     for attempt in range(3):
         resp = requests.post(
             GROQ_URL,
@@ -255,14 +256,24 @@ def analyze_with_llm(scraped: dict) -> dict:
             raise ValueError("Invalid Groq API key — check it at console.groq.com.")
 
         resp.raise_for_status()
-        break
 
-    raw = resp.json()["choices"][0]["message"]["content"].strip()
-    raw = re.sub(r"^```(?:json)?\s*", "", raw)
-    raw = re.sub(r"\s*```$", "", raw)
-    if not raw:
-        raise json.JSONDecodeError("LLM returned an empty response", "", 0)
-    return json.loads(raw)
+        raw = resp.json()["choices"][0]["message"]["content"].strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+
+        if not raw:
+            last_json_error = json.JSONDecodeError("LLM returned an empty response", "", 0)
+            time.sleep(3)
+            continue
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError as e:
+            last_json_error = e
+            time.sleep(3)
+            continue
+
+    raise last_json_error
 
 
 # ---------------------------------------------------------------------------
