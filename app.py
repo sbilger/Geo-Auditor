@@ -168,7 +168,7 @@ def _parse_json(raw: str) -> dict:
 def _call_anthropic(prompt: str) -> str:
     payload = {
         "model":    ANTHROPIC_MODEL,
-        "max_tokens": 2000,
+        "max_tokens": 4096,
         "system":   _SYSTEM_PROMPT,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.2,
@@ -198,7 +198,7 @@ def _call_xai(prompt: str) -> str:
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user",   "content": prompt},
         ],
-        "max_tokens": 2000,
+        "max_tokens": 4096,
         "temperature": 0.2,
         "response_format": {"type": "json_object"},
     }
@@ -226,7 +226,7 @@ def _call_gemini(prompt: str) -> str:
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.2,
-            "maxOutputTokens": 2000,
+            "maxOutputTokens": 4096,
             "responseMimeType": "application/json",
         },
     }
