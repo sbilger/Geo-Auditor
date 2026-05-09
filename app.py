@@ -8,6 +8,8 @@ from urllib.parse import urlparse
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 
+import apify_helper
+
 app = Flask(__name__, static_folder="static")
 CORS(app)
 
@@ -87,6 +89,12 @@ Return ONLY valid JSON in this exact shape (no markdown fences, no extra text):
 # ---------------------------------------------------------------------------
 
 def _scrape(url: str) -> dict:
+    # Apify path: handles JS-rendered sites (React, Webflow, Squarespace) where
+    # plain requests.get returns half-empty HTML and audits score artificially low.
+    apify_result = apify_helper.crawl_website(url)
+    if apify_result is not None:
+        return apify_result
+
     resp = requests.get(url, headers=_HEADERS, timeout=20, allow_redirects=True)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
