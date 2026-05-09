@@ -597,6 +597,11 @@ def synthetic_audit_for_empty_page(scraped: dict) -> dict:
 # Routes
 # ---------------------------------------------------------------------------
 
+@app.route("/healthz")
+def healthz():
+    return {"status": "ok"}, 200
+
+
 @app.route("/")
 def index():
     return send_from_directory("static", "index.html")
