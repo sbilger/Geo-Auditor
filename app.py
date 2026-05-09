@@ -76,6 +76,20 @@ def scrape_page(url: str) -> dict:
             )
         resp.raise_for_status()
         break
+    # Detect Cloudflare / bot-protection challenge pages before parsing
+    cf_challenge = (
+        resp.headers.get("cf-ray")
+        or resp.headers.get("server", "").lower() == "cloudflare"
+        or "challenge-platform" in resp.text
+        or "Just a moment" in resp.text
+        or ("cf-browser-verification" in resp.text)
+    )
+    if cf_challenge and len(resp.text) < 20000:
+        raise requests.exceptions.RequestException(
+            "This site is protected by Cloudflare bot detection and blocked the audit request. "
+            "The audit cannot be completed from a server IP — the site must be accessed from a browser."
+        )
+
     soup = BeautifulSoup(resp.text, "html.parser")
 
     title = soup.title.string.strip() if soup.title else ""
@@ -94,8 +108,9 @@ def scrape_page(url: str) -> dict:
 
     for tag in soup(["script", "style", "noscript", "header", "footer", "nav"]):
         tag.decompose()
-    body_text = soup.get_text(separator="\n", strip=True)
-    lines = [ln for ln in body_text.splitlines() if len(ln.strip()) > 30]
+    raw_body = soup.get_text(separator="\n", strip=True)
+    raw_word_count = len(raw_body.split())
+    lines = [ln for ln in raw_body.splitlines() if len(ln.strip()) > 30]
     body_text = "\n".join(lines[:200])
 
     has_schema = bool(soup.find("script", {"type": "application/ld+json"}))
@@ -121,7 +136,7 @@ def scrape_page(url: str) -> dict:
         "has_schema_markup": has_schema,
         "schema_types": schema_types,
         "has_faq_section": has_faq,
-        "word_count": len(body_text.split()),
+        "word_count": raw_word_count,
     }
 
 
@@ -605,8 +620,8 @@ def audit():
         return jsonify({"error": f"Could not fetch the page: {e}"}), 422
 
     is_near_empty = (
-        scraped["word_count"] < 10
-        and len(scraped["headings"]) <= 2
+        scraped["word_count"] < 50
+        and len(scraped["headings"]) <= 1
         and not scraped["meta_description"]
     )
 
