@@ -9,10 +9,6 @@ from bs4 import BeautifulSoup
 app = Flask(__name__, static_folder="static")
 CORS(app)
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = "llama-3.3-70b-versatile"
-
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-2.0-flash"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
@@ -221,98 +217,8 @@ Return ONLY valid JSON in this exact shape (no markdown fences, no extra text):
 }}"""
 
 
-def analyze_with_llm(scraped: dict) -> dict:
-    import time
-
-    headings_text = "\n".join(
-        f"  {h['level']}: {h['text']}" for h in scraped["headings"]
-    )
-    prompt = AUDIT_PROMPT.format(
-        url=scraped["url"],
-        title=scraped["title"],
-        meta_description=scraped["meta_description"],
-        has_schema_markup=scraped["has_schema_markup"],
-        schema_types=", ".join(scraped["schema_types"]) or "None detected",
-        has_faq_section=scraped["has_faq_section"],
-        word_count=scraped["word_count"],
-        headings=headings_text or "(none found)",
-        body_text=scraped["body_text"][:2000],
-    )
-
-    payload = {
-        "model": GROQ_MODEL,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a GEO audit assistant. You ALWAYS respond with valid JSON only — "
-                    "no explanations, no refusals, no markdown. If the page has little or no content, "
-                    "still return the full JSON structure with scores of 0 and notes reflecting the lack of content."
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ],
-        "max_tokens": 2000,
-        "temperature": 0.2,
-    }
-
-    last_json_error = None
-    for attempt in range(3):
-        resp = requests.post(
-            GROQ_URL,
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=60,
-        )
-
-        if resp.status_code == 429:
-            if attempt < 2:
-                time.sleep(10)
-                continue
-            raise ValueError("Rate limit reached. Please wait a moment and try again.")
-
-        if resp.status_code == 401:
-            raise ValueError("Invalid Groq API key — check it at console.groq.com.")
-
-        resp.raise_for_status()
-
-        raw = resp.json()["choices"][0]["message"]["content"].strip()
-        # Strip markdown fences
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-
-        if not raw:
-            last_json_error = json.JSONDecodeError("LLM returned an empty response", "", 0)
-            time.sleep(3)
-            continue
-
-        # Try direct parse first, then fall back to extracting the JSON object
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            pass
-
-        # Find the outermost { ... } block in case the model added surrounding text
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError as e:
-                last_json_error = e
-        else:
-            last_json_error = json.JSONDecodeError("No JSON object found in LLM response", raw, 0)
-
-        time.sleep(3)
-        continue
-
-    raise last_json_error
-
-
 def analyze_with_xai(scraped: dict) -> dict:
-    """Fallback to xAI Grok when Groq is unavailable. Uses OpenAI-compatible API."""
+    """Fallback to xAI Grok. Uses OpenAI-compatible API."""
     if not XAI_API_KEY:
         raise ValueError("XAI_API_KEY is not set.")
 
@@ -596,13 +502,12 @@ def analyze_with_anthropic(scraped: dict) -> dict:
 
 
 def run_audit_with_fallbacks(scraped: dict):
-    """Try LLM providers in order: Groq → XAI → Gemini → Anthropic → synthetic.
+    """Try LLM providers in order: Anthropic → XAI → Gemini.
     Returns either an audit dict, or a (jsonify_response, status_code) tuple on hard failure."""
     providers = [
-        ("Groq", GROQ_API_KEY, analyze_with_llm),
+        ("Anthropic", ANTHROPIC_API_KEY, analyze_with_anthropic),
         ("XAI", XAI_API_KEY, analyze_with_xai),
         ("Gemini", GEMINI_API_KEY, analyze_with_gemini),
-        ("Anthropic", ANTHROPIC_API_KEY, analyze_with_anthropic),
     ]
 
     errors = []
@@ -684,8 +589,8 @@ def index():
 
 @app.route("/api/audit", methods=["POST"])
 def audit():
-    if not (GROQ_API_KEY or GEMINI_API_KEY or XAI_API_KEY or ANTHROPIC_API_KEY):
-        return jsonify({"error": "No LLM API key configured. Set GROQ_API_KEY, GEMINI_API_KEY, XAI_API_KEY, or ANTHROPIC_API_KEY."}), 503
+    if not (ANTHROPIC_API_KEY or XAI_API_KEY or GEMINI_API_KEY):
+        return jsonify({"error": "No LLM API key configured. Set ANTHROPIC_API_KEY, XAI_API_KEY, or GEMINI_API_KEY."}), 503
 
     body = request.get_json(force=True)
     url = (body.get("url") or "").strip()
