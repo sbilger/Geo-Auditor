@@ -1,150 +1,35 @@
 import os
 import json
 import re
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
+import time
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
 
 app = Flask(__name__, static_folder="static")
 CORS(app)
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = "gemini-2.0-flash"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
-
-XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
-XAI_URL = "https://api.x.ai/v1/chat/completions"
-XAI_MODEL = os.environ.get("XAI_MODEL", "grok-3-mini")
-
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+XAI_API_KEY       = os.environ.get("XAI_API_KEY", "")
+GEMINI_API_KEY    = os.environ.get("GEMINI_API_KEY", "")
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "cross-site",
-    "Sec-Fetch-User": "?1",
-    "Sec-CH-UA": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-    "Sec-CH-UA-Mobile": "?0",
-    "Sec-CH-UA-Platform": '"Windows"',
-    "Referer": "https://www.google.com/",
-    "DNT": "1",
-    "Cache-Control": "max-age=0",
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+XAI_MODEL       = os.environ.get("XAI_MODEL",       "grok-4-fast-non-reasoning")
+GEMINI_MODEL    = os.environ.get("GEMINI_MODEL",     "gemini-2.5-flash")
+
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "Accept":     "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 
-# ---------------------------------------------------------------------------
-# Scraping
-# ---------------------------------------------------------------------------
+_SYSTEM_PROMPT = (
+    "You are a GEO audit assistant. You ALWAYS respond with valid JSON only — "
+    "no explanations, no refusals, no markdown."
+)
 
-def scrape_page(url: str) -> dict:
-    import time
-    from urllib.parse import urlparse
-
-    session = requests.Session()
-    session.headers.update(HEADERS)
-
-    # Warm up the session with a HEAD request to establish cookies
-    try:
-        parsed = urlparse(url)
-        root = f"{parsed.scheme}://{parsed.netloc}"
-        session.head(root, timeout=8, allow_redirects=True)
-        time.sleep(1)
-    except Exception:
-        pass
-
-    for attempt in range(3):
-        resp = session.get(url, timeout=15, allow_redirects=True)
-        if resp.status_code == 429:
-            if attempt < 2:
-                time.sleep(6 * (attempt + 1))
-                continue
-            raise requests.exceptions.RequestException(
-                "This site is blocking automated access. "
-                "It may use JavaScript-based bot protection that requires a real browser."
-            )
-        resp.raise_for_status()
-        break
-    # Detect Cloudflare / bot-protection challenge pages before parsing
-    cf_challenge = (
-        resp.headers.get("cf-ray")
-        or resp.headers.get("server", "").lower() == "cloudflare"
-        or "challenge-platform" in resp.text
-        or "Just a moment" in resp.text
-        or ("cf-browser-verification" in resp.text)
-    )
-    if cf_challenge and len(resp.text) < 20000:
-        raise requests.exceptions.RequestException(
-            "This site is protected by Cloudflare bot detection and blocked the audit request. "
-            "The audit cannot be completed from a server IP — the site must be accessed from a browser."
-        )
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-
-    title = soup.title.string.strip() if soup.title else ""
-    meta_desc = ""
-    for tag in soup.find_all("meta"):
-        if tag.get("name", "").lower() == "description":
-            meta_desc = tag.get("content", "").strip()
-            break
-
-    headings = []
-    for level in ["h1", "h2", "h3"]:
-        for tag in soup.find_all(level):
-            text = tag.get_text(strip=True)
-            if text:
-                headings.append({"level": level.upper(), "text": text})
-
-    for tag in soup(["script", "style", "noscript", "header", "footer", "nav"]):
-        tag.decompose()
-    raw_body = soup.get_text(separator="\n", strip=True)
-    raw_word_count = len(raw_body.split())
-    lines = [ln for ln in raw_body.splitlines() if len(ln.strip()) > 30]
-    body_text = "\n".join(lines[:200])
-
-    has_schema = bool(soup.find("script", {"type": "application/ld+json"}))
-    schema_types = []
-    for tag in soup.find_all("script", {"type": "application/ld+json"}):
-        try:
-            data = json.loads(tag.string or "")
-            t = data.get("@type") or (data.get("@graph", [{}])[0].get("@type", ""))
-            if t:
-                schema_types.append(t if isinstance(t, str) else ", ".join(t))
-        except Exception:
-            pass
-
-    faq_patterns = re.compile(r"\b(faq|frequently asked|q&a|questions)\b", re.I)
-    has_faq = bool(faq_patterns.search(resp.text))
-
-    return {
-        "url": url,
-        "title": title,
-        "meta_description": meta_desc,
-        "headings": headings[:20],
-        "body_text": body_text,
-        "has_schema_markup": has_schema,
-        "schema_types": schema_types,
-        "has_faq_section": has_faq,
-        "word_count": raw_word_count,
-    }
-
-
-# ---------------------------------------------------------------------------
-# LLM analysis
-# ---------------------------------------------------------------------------
-
-AUDIT_PROMPT = """You are an expert in Generative Engine Optimization (GEO) — the practice of optimizing websites so that AI search engines (ChatGPT, Google AI Overviews, Perplexity, Claude) cite and surface them in answers.
+_AUDIT_PROMPT = """You are an expert in Generative Engine Optimization (GEO) — the practice of optimizing websites so that AI search engines (ChatGPT, Google AI Overviews, Perplexity, Claude) cite and surface them in answers.
 
 Analyze the following scraped website data and produce a structured GEO audit.
 
@@ -152,9 +37,9 @@ Analyze the following scraped website data and produce a structured GEO audit.
 URL: {url}
 Title: {title}
 Meta Description: {meta_description}
-Has Schema Markup: {has_schema_markup}
+Has Schema Markup: {has_schema}
 Schema Types Found: {schema_types}
-Has FAQ Section: {has_faq_section}
+Has FAQ Section: {has_faq}
 Word Count: {word_count}
 
 ### Headings
@@ -175,422 +60,227 @@ For each pillar provide:
 
 ### The 5 GEO Pillars
 
-1. **conversational_clarity** — Does the content directly answer natural-language questions an AI would be asked? Look for: question-and-answer patterns, clear definitions, use of "what/how/why/when" sentence structures.
-
-2. **entity_density** — How rich is the page in named entities that ground it geographically and topically? Look for: business name, address, phone, hours, service names, staff names, prices, neighborhoods served.
-
-3. **direct_answer_formatting** — Is the content structured so an AI can extract a crisp answer to paste into a response? Look for: numbered lists, bullet points, short declarative paragraphs, FAQ sections, "X is Y" sentence structures.
-
-4. **citation_worthiness** — Does the page contain specific, quotable, authoritative information an AI would want to cite? Look for: statistics, named credentials/awards, specific prices, before/after results, unique methodology names.
-
-5. **schema_and_structure** — Does the page have technical signals that help AI crawlers understand the business? Look for: LocalBusiness schema, FAQPage schema, Review schema, BreadcrumbList, proper H1/H2 hierarchy.
+1. **conversational_clarity** — Does the content directly answer natural-language questions an AI would be asked?
+2. **entity_density** — How rich is the page in named entities that ground it geographically and topically?
+3. **direct_answer_formatting** — Is the content structured so an AI can extract a crisp answer?
+4. **citation_worthiness** — Does the page contain specific, quotable, authoritative information an AI would want to cite?
+5. **schema_and_structure** — Does the page have technical signals that help AI crawlers understand the business?
 
 Return ONLY valid JSON in this exact shape (no markdown fences, no extra text):
 {{
   "overall_score": <integer>,
   "overall_grade": "<letter>",
   "business_type_detected": "<string>",
-  "one_line_verdict": "<string — one punchy sentence describing the biggest GEO problem>",
+  "one_line_verdict": "<string>",
   "pillars": {{
-    "conversational_clarity": {{
-      "score": <int>,
-      "grade": "<letter>",
-      "summary": "<string>",
-      "top_issues": ["<string>", "<string>"],
-      "quick_wins": ["<string>", "<string>"]
-    }},
-    "entity_density": {{
-      "score": <int>,
-      "grade": "<letter>",
-      "summary": "<string>",
-      "top_issues": ["<string>", "<string>"],
-      "quick_wins": ["<string>", "<string>"]
-    }},
-    "direct_answer_formatting": {{
-      "score": <int>,
-      "grade": "<letter>",
-      "summary": "<string>",
-      "top_issues": ["<string>", "<string>"],
-      "quick_wins": ["<string>", "<string>"]
-    }},
-    "citation_worthiness": {{
-      "score": <int>,
-      "grade": "<letter>",
-      "summary": "<string>",
-      "top_issues": ["<string>", "<string>"],
-      "quick_wins": ["<string>", "<string>"]
-    }},
-    "schema_and_structure": {{
-      "score": <int>,
-      "grade": "<letter>",
-      "summary": "<string>",
-      "top_issues": ["<string>", "<string>"],
-      "quick_wins": ["<string>", "<string>"]
-    }}
-  }},
+    "conversational_clarity":  {{"score": <int>, "grade": "<letter>", "summary": "<string>", "top_issues": ["<string>", "<string>"], "quick_wins": ["<string>", "<string>"]}},
+    "entity_density":          {{"score": <int>, "grade": "<letter>", "summary": "<string>", "top_issues": ["<string>", "<string>"], "quick_wins": ["<string>", "<string>"]}},
+    "direct_answer_formatting":{{"score": <int>, "grade": "<letter>", "summary": "<string>", "top_issues": ["<string>", "<string>"], "quick_wins": ["<string>", "<string>"]}},
+    "citation_worthiness":     {{"score": <int>, "grade": "<letter>", "summary": "<string>", "top_issues": ["<string>", "<string>"], "quick_wins": ["<string>", "<string>"]}},
+    "schema_and_structure":    {{"score": <int>, "grade": "<letter>", "summary": "<string>", "top_issues": ["<string>", "<string>"], "quick_wins": ["<string>", "<string>"]}}}},
   "priority_action": "<The single highest-impact thing this business should do this week>"
 }}"""
 
 
-def analyze_with_xai(scraped: dict) -> dict:
-    """Fallback to xAI Grok. Uses OpenAI-compatible API."""
-    if not XAI_API_KEY:
-        raise ValueError("XAI_API_KEY is not set.")
+# ---------------------------------------------------------------------------
+# Scraping — ported directly from combined_seo_geo_audit.py in the Dashboard
+# ---------------------------------------------------------------------------
 
-    import time
+def _scrape(url: str) -> dict:
+    resp = requests.get(url, headers=_HEADERS, timeout=20, allow_redirects=True)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
 
-    headings_text = "\n".join(
-        f"  {h['level']}: {h['text']}" for h in scraped["headings"]
-    )
-    prompt = AUDIT_PROMPT.format(
-        url=scraped["url"],
-        title=scraped["title"],
-        meta_description=scraped["meta_description"],
-        has_schema_markup=scraped["has_schema_markup"],
-        schema_types=", ".join(scraped["schema_types"]) or "None detected",
-        has_faq_section=scraped["has_faq_section"],
-        word_count=scraped["word_count"],
-        headings=headings_text or "(none found)",
-        body_text=scraped["body_text"][:2000],
-    )
+    title = soup.title.string.strip() if soup.title and soup.title.string else ""
+    meta_desc = ""
+    for tag in soup.find_all("meta"):
+        if tag.get("name", "").lower() == "description":
+            meta_desc = tag.get("content", "").strip()
+            break
 
+    headings = []
+    for level in ["h1", "h2", "h3"]:
+        for tag in soup.find_all(level):
+            text = tag.get_text(strip=True)
+            if text:
+                headings.append({"level": level.upper(), "text": text})
+
+    schema_tags = soup.find_all("script", {"type": "application/ld+json"})
+    has_schema = bool(schema_tags)
+    schema_types = []
+    for tag in schema_tags:
+        try:
+            data = json.loads(tag.string or "")
+            t = data.get("@type") or (data.get("@graph", [{}])[0].get("@type", ""))
+            if t:
+                schema_types.append(t if isinstance(t, str) else ", ".join(t))
+        except Exception:
+            pass
+
+    has_faq = bool(re.search(r"\b(faq|frequently asked|q&a)\b", resp.text, re.I))
+
+    for tag in soup(["script", "style", "noscript", "header", "footer", "nav"]):
+        tag.decompose()
+    raw_body  = soup.get_text(separator="\n", strip=True)
+    word_count = len(raw_body.split())
+    lines     = [ln for ln in raw_body.splitlines() if len(ln.strip()) > 30]
+    body_text = "\n".join(lines[:200])
+
+    return {
+        "url":             url,
+        "title":           title,
+        "meta_description": meta_desc,
+        "headings":        headings[:25],
+        "body_text":       body_text,
+        "word_count":      word_count,
+        "has_schema":      has_schema,
+        "schema_types":    schema_types,
+        "has_faq":         has_faq,
+    }
+
+
+# ---------------------------------------------------------------------------
+# JSON parsing — ported from combined_seo_geo_audit.py
+# ---------------------------------------------------------------------------
+
+def _parse_json(raw: str) -> dict:
+    cleaned = raw.strip()
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+    m = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group())
+        except json.JSONDecodeError:
+            pass
+    relaxed = re.sub(r",(\s*[}\]])", r"\1", cleaned)
+    return json.loads(relaxed)
+
+
+# ---------------------------------------------------------------------------
+# Provider callers — ported from combined_seo_geo_audit.py
+# ---------------------------------------------------------------------------
+
+def _call_anthropic(prompt: str) -> str:
     payload = {
-        "model": XAI_MODEL,
+        "model":    ANTHROPIC_MODEL,
+        "max_tokens": 2000,
+        "system":   _SYSTEM_PROMPT,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.2,
+    }
+    headers = {
+        "x-api-key":         ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type":      "application/json",
+    }
+    for _ in range(3):
+        resp = requests.post("https://api.anthropic.com/v1/messages",
+                             headers=headers, json=payload, timeout=60)
+        if resp.status_code == 429:
+            time.sleep(8)
+            continue
+        if resp.status_code in (401, 403):
+            raise ValueError("Invalid Anthropic API key.")
+        resp.raise_for_status()
+        return resp.json()["content"][0]["text"]
+    raise RuntimeError("Anthropic rate-limited after 3 attempts")
+
+
+def _call_xai(prompt: str) -> str:
+    payload = {
+        "model":   XAI_MODEL,
         "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a GEO audit assistant. You ALWAYS respond with valid JSON only — "
-                    "no explanations, no refusals, no markdown. If the page has little or no content, "
-                    "still return the full JSON structure with scores of 0 and notes reflecting the lack of content."
-                ),
-            },
-            {"role": "user", "content": prompt},
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user",   "content": prompt},
         ],
         "max_tokens": 2000,
         "temperature": 0.2,
+        "response_format": {"type": "json_object"},
     }
-
-    last_json_error = None
-    for attempt in range(3):
-        resp = requests.post(
-            XAI_URL,
-            headers={
-                "Authorization": f"Bearer {XAI_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=60,
-        )
-
+    headers = {
+        "Authorization": f"Bearer {XAI_API_KEY}",
+        "Content-Type":  "application/json",
+    }
+    for _ in range(3):
+        resp = requests.post("https://api.x.ai/v1/chat/completions",
+                             headers=headers, json=payload, timeout=60)
         if resp.status_code == 429:
-            if attempt < 2:
-                time.sleep(8)
-                continue
-            raise ValueError("xAI rate limit reached.")
-
-        if resp.status_code in (401, 403):
-            raise ValueError("Invalid xAI API key — check it at console.x.ai.")
-
-        if resp.status_code == 400:
-            # Surface the actual xAI error so we can see what's wrong with the request
-            try:
-                err_detail = resp.json().get("error", resp.text[:200])
-            except Exception:
-                err_detail = resp.text[:200]
-            raise ValueError(f"xAI rejected request (400): {err_detail}")
-
-        resp.raise_for_status()
-
-        raw = resp.json()["choices"][0]["message"]["content"].strip()
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-
-        if not raw:
-            last_json_error = json.JSONDecodeError("xAI returned an empty response", "", 0)
-            time.sleep(3)
+            time.sleep(8)
             continue
-
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            pass
-
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError as e:
-                last_json_error = e
-        else:
-            last_json_error = json.JSONDecodeError("No JSON object found in xAI response", raw, 0)
-
-        time.sleep(3)
-
-    raise last_json_error
+        if resp.status_code in (401, 403):
+            raise ValueError("Invalid xAI API key.")
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+    raise RuntimeError("xAI rate-limited after 3 attempts")
 
 
-def analyze_with_gemini(scraped: dict) -> dict:
-    """Fallback to Google Gemini when Groq is unavailable or rate-limited."""
-    if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY is not set — add it in Render environment variables.")
-
-    import time
-
-    headings_text = "\n".join(
-        f"  {h['level']}: {h['text']}" for h in scraped["headings"]
-    )
-    prompt = AUDIT_PROMPT.format(
-        url=scraped["url"],
-        title=scraped["title"],
-        meta_description=scraped["meta_description"],
-        has_schema_markup=scraped["has_schema_markup"],
-        schema_types=", ".join(scraped["schema_types"]) or "None detected",
-        has_faq_section=scraped["has_faq_section"],
-        word_count=scraped["word_count"],
-        headings=headings_text or "(none found)",
-        body_text=scraped["body_text"][:2000],
-    )
-
-    system_instruction = (
-        "You are a GEO audit assistant. You ALWAYS respond with valid JSON only — "
-        "no explanations, no refusals, no markdown. If the page has little or no content, "
-        "still return the full JSON structure with scores of 0 and notes reflecting the lack of content."
-    )
-
+def _call_gemini(prompt: str) -> str:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
     payload = {
+        "systemInstruction": {"parts": [{"text": _SYSTEM_PROMPT}]},
         "contents": [{"parts": [{"text": prompt}]}],
-        "systemInstruction": {"parts": [{"text": system_instruction}]},
         "generationConfig": {
             "temperature": 0.2,
             "maxOutputTokens": 2000,
             "responseMimeType": "application/json",
         },
     }
-
-    last_json_error = None
-    for attempt in range(3):
-        resp = requests.post(
-            GEMINI_URL,
-            params={"key": GEMINI_API_KEY},
-            headers={"Content-Type": "application/json"},
-            json=payload,
-            timeout=60,
-        )
-
+    for _ in range(3):
+        resp = requests.post(url, params={"key": GEMINI_API_KEY}, json=payload, timeout=60)
         if resp.status_code == 429:
-            if attempt < 2:
-                time.sleep(8)
-                continue
-            raise ValueError("Gemini rate limit reached.")
-
+            time.sleep(8)
+            continue
         if resp.status_code in (401, 403):
-            raise ValueError("Invalid Gemini API key — check it at aistudio.google.com.")
-
+            raise ValueError("Invalid Gemini API key.")
         resp.raise_for_status()
-
-        data = resp.json()
-        try:
-            raw = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        except (KeyError, IndexError):
-            last_json_error = json.JSONDecodeError("Gemini returned no content", "", 0)
-            time.sleep(3)
-            continue
-
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-
-        if not raw:
-            last_json_error = json.JSONDecodeError("Gemini returned an empty response", "", 0)
-            time.sleep(3)
-            continue
-
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            pass
-
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError as e:
-                last_json_error = e
-        else:
-            last_json_error = json.JSONDecodeError("No JSON object found in Gemini response", raw, 0)
-
-        time.sleep(3)
-
-    raise last_json_error
+        return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    raise RuntimeError("Gemini rate-limited after 3 attempts")
 
 
-def analyze_with_anthropic(scraped: dict) -> dict:
-    """Fallback to Anthropic Claude when other providers are unavailable."""
-    if not ANTHROPIC_API_KEY:
-        raise ValueError("ANTHROPIC_API_KEY is not set.")
+# ---------------------------------------------------------------------------
+# Audit orchestration — Anthropic → XAI → Gemini
+# ---------------------------------------------------------------------------
 
-    import time
-
-    headings_text = "\n".join(
-        f"  {h['level']}: {h['text']}" for h in scraped["headings"]
-    )
-    prompt = AUDIT_PROMPT.format(
-        url=scraped["url"],
-        title=scraped["title"],
-        meta_description=scraped["meta_description"],
-        has_schema_markup=scraped["has_schema_markup"],
-        schema_types=", ".join(scraped["schema_types"]) or "None detected",
-        has_faq_section=scraped["has_faq_section"],
-        word_count=scraped["word_count"],
-        headings=headings_text or "(none found)",
-        body_text=scraped["body_text"][:2000],
+def _build_prompt(s: dict) -> str:
+    headings_text = "\n".join(f"  {h['level']}: {h['text']}" for h in s["headings"]) or "(none)"
+    return _AUDIT_PROMPT.format(
+        url=s["url"],
+        title=s["title"],
+        meta_description=s["meta_description"],
+        has_schema=s["has_schema"],
+        schema_types=", ".join(s["schema_types"]) or "None detected",
+        has_faq=s["has_faq"],
+        word_count=s["word_count"],
+        headings=headings_text,
+        body_text=s["body_text"][:2000],
     )
 
-    payload = {
-        "model": ANTHROPIC_MODEL,
-        "max_tokens": 2000,
-        "system": (
-            "You are a GEO audit assistant. You ALWAYS respond with valid JSON only — "
-            "no explanations, no refusals, no markdown. If the page has little or no content, "
-            "still return the full JSON structure with scores of 0 and notes reflecting the lack of content."
-        ),
-        "messages": [{"role": "user", "content": prompt}],
-    }
 
-    last_json_error = None
-    for attempt in range(3):
-        resp = requests.post(
-            ANTHROPIC_URL,
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=60,
-        )
-
-        if resp.status_code == 429:
-            if attempt < 2:
-                time.sleep(8)
-                continue
-            raise ValueError("Anthropic rate limit reached.")
-
-        if resp.status_code in (401, 403):
-            raise ValueError("Invalid Anthropic API key — check it at console.anthropic.com.")
-
-        if resp.status_code == 400:
-            try:
-                err_detail = resp.json().get("error", {}).get("message", resp.text[:200])
-            except Exception:
-                err_detail = resp.text[:200]
-            raise ValueError(f"Anthropic rejected request (400): {err_detail}")
-
-        resp.raise_for_status()
-
-        raw = resp.json()["content"][0]["text"].strip()
-        raw = re.sub(r"^```(?:json)?\s*", "", raw)
-        raw = re.sub(r"\s*```$", "", raw)
-
-        if not raw:
-            last_json_error = json.JSONDecodeError("Anthropic returned an empty response", "", 0)
-            time.sleep(3)
-            continue
-
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            pass
-
-        match = re.search(r'\{.*\}', raw, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError as e:
-                last_json_error = e
-        else:
-            last_json_error = json.JSONDecodeError("No JSON object found in Anthropic response", raw, 0)
-
-        time.sleep(3)
-
-    raise last_json_error
-
-
-def run_audit_with_fallbacks(scraped: dict):
-    """Try LLM providers in order: Anthropic → XAI → Gemini.
-    Returns either an audit dict, or a (jsonify_response, status_code) tuple on hard failure."""
+def _run_audit(s: dict) -> dict:
+    prompt = _build_prompt(s)
     providers = [
-        ("Anthropic", ANTHROPIC_API_KEY, analyze_with_anthropic),
-        ("XAI", XAI_API_KEY, analyze_with_xai),
-        ("Gemini", GEMINI_API_KEY, analyze_with_gemini),
+        ("Anthropic", ANTHROPIC_API_KEY, _call_anthropic),
+        ("XAI",       XAI_API_KEY,       _call_xai),
+        ("Gemini",    GEMINI_API_KEY,     _call_gemini),
     ]
-
     errors = []
-    for name, key, fn in providers:
+    for name, key, caller in providers:
         if not key:
             errors.append(f"{name}: not configured")
             continue
         try:
-            return fn(scraped)
-        except json.JSONDecodeError:
-            return synthetic_audit_for_empty_page(scraped)
-        except ValueError as e:
+            raw = caller(prompt)
+            return _parse_json(raw)
+        except (ValueError, RuntimeError) as e:
             errors.append(f"{name}: {e}")
-            continue
         except requests.exceptions.RequestException as e:
             errors.append(f"{name}: {e}")
-            continue
-
-    return jsonify({"error": "All LLM providers failed → " + " | ".join(errors)}), 503
-
-
-def synthetic_audit_for_empty_page(scraped: dict) -> dict:
-    """Return a deterministic GEO audit for pages with little or no scrapable content
-    (typically JavaScript-rendered SPAs like Shopify, Wix, Squarespace storefronts)."""
-    pillar = lambda summary, issues, wins: {
-        "score": 0,
-        "grade": "F",
-        "summary": summary,
-        "top_issues": issues,
-        "quick_wins": wins,
-    }
-    return {
-        "overall_score": 5,
-        "overall_grade": "F",
-        "business_type_detected": "JS-rendered site",
-        "one_line_verdict": "AI engines see almost nothing — your site relies on JavaScript to display its content, which most AI crawlers cannot read.",
-        "pillars": {
-            "conversational_clarity": pillar(
-                "AI crawlers see no readable content because the page renders client-side.",
-                ["Page returns minimal HTML before JavaScript runs", "No question/answer text visible to crawlers"],
-                ["Add server-rendered text content", "Use SSR or pre-rendering for crawlers"],
-            ),
-            "entity_density": pillar(
-                "No business entities (name, address, services) are visible in the raw HTML.",
-                ["Business name and details not in static HTML", "No structured contact information"],
-                ["Add a server-rendered footer with NAP details", "Include business info in the static page source"],
-            ),
-            "direct_answer_formatting": pillar(
-                "No structured content (lists, FAQs, headings) detected in the static HTML.",
-                ["No FAQ section in raw HTML", "No bullet points or direct-answer formatting"],
-                ["Add a server-rendered FAQ block", "Include key product/service descriptions in static HTML"],
-            ),
-            "citation_worthiness": pillar(
-                "No quotable, authoritative content is visible to AI crawlers.",
-                ["No statistics, credentials, or unique value props in HTML", "No reviews or testimonials in static markup"],
-                ["Render testimonials server-side", "Add credentials and awards to the static page"],
-            ),
-            "schema_and_structure": pillar(
-                "Schema and heading structure cannot be assessed — page content loads via JavaScript.",
-                ["No detectable schema markup in static HTML", "Heading hierarchy not rendered server-side"],
-                ["Inject LocalBusiness schema in the document head", "Pre-render H1/H2 hierarchy"],
-            ),
-        },
-        "priority_action": (
-            "Enable server-side rendering or static pre-rendering so AI crawlers can read your content. "
-            "This is the single biggest GEO blocker for this site."
-        ),
-    }
+    raise RuntimeError("All providers failed — " + " | ".join(errors))
 
 
 # ---------------------------------------------------------------------------
@@ -610,42 +300,33 @@ def index():
 @app.route("/api/audit", methods=["POST"])
 def audit():
     if not (ANTHROPIC_API_KEY or XAI_API_KEY or GEMINI_API_KEY):
-        return jsonify({"error": "No LLM API key configured. Set ANTHROPIC_API_KEY, XAI_API_KEY, or GEMINI_API_KEY."}), 503
+        return jsonify({"error": "No LLM API key configured."}), 503
 
     body = request.get_json(force=True)
-    url = (body.get("url") or "").strip()
+    url  = (body.get("url") or "").strip()
     if not url:
         return jsonify({"error": "URL is required"}), 400
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
     try:
-        scraped = scrape_page(url)
+        scraped = _scrape(url)
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Could not fetch the page: {e}"}), 422
 
-    is_near_empty = (
-        scraped["word_count"] < 10
-        and not scraped["headings"]
-        and not scraped["title"]
-    )
-
-    if is_near_empty:
-        analysis = synthetic_audit_for_empty_page(scraped)
-    else:
-        analysis = run_audit_with_fallbacks(scraped)
-        if isinstance(analysis, tuple):  # error response
-            return analysis
+    try:
+        analysis = _run_audit(scraped)
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 503
 
     return jsonify({
         "meta": {
-            "url": scraped["url"],
-            "title": scraped["title"],
-            "word_count": scraped["word_count"],
-            "headings_count": len(scraped["headings"]),
-            "has_schema": scraped["has_schema_markup"],
+            "url":          scraped["url"],
+            "title":        scraped["title"],
+            "word_count":   scraped["word_count"],
+            "has_schema":   scraped["has_schema"],
             "schema_types": scraped["schema_types"],
-            "has_faq": scraped["has_faq_section"],
+            "has_faq":      scraped["has_faq"],
         },
         "audit": analysis,
     })
