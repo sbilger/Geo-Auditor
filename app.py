@@ -21,6 +21,10 @@ XAI_API_KEY = os.environ.get("XAI_API_KEY", "")
 XAI_URL = "https://api.x.ai/v1/chat/completions"
 XAI_MODEL = os.environ.get("XAI_MODEL", "grok-3-mini")
 
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -499,12 +503,106 @@ def analyze_with_gemini(scraped: dict) -> dict:
     raise last_json_error
 
 
+def analyze_with_anthropic(scraped: dict) -> dict:
+    """Fallback to Anthropic Claude when other providers are unavailable."""
+    if not ANTHROPIC_API_KEY:
+        raise ValueError("ANTHROPIC_API_KEY is not set.")
+
+    import time
+
+    headings_text = "\n".join(
+        f"  {h['level']}: {h['text']}" for h in scraped["headings"]
+    )
+    prompt = AUDIT_PROMPT.format(
+        url=scraped["url"],
+        title=scraped["title"],
+        meta_description=scraped["meta_description"],
+        has_schema_markup=scraped["has_schema_markup"],
+        schema_types=", ".join(scraped["schema_types"]) or "None detected",
+        has_faq_section=scraped["has_faq_section"],
+        word_count=scraped["word_count"],
+        headings=headings_text or "(none found)",
+        body_text=scraped["body_text"][:2000],
+    )
+
+    payload = {
+        "model": ANTHROPIC_MODEL,
+        "max_tokens": 2000,
+        "system": (
+            "You are a GEO audit assistant. You ALWAYS respond with valid JSON only — "
+            "no explanations, no refusals, no markdown. If the page has little or no content, "
+            "still return the full JSON structure with scores of 0 and notes reflecting the lack of content."
+        ),
+        "messages": [{"role": "user", "content": prompt}],
+    }
+
+    last_json_error = None
+    for attempt in range(3):
+        resp = requests.post(
+            ANTHROPIC_URL,
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=60,
+        )
+
+        if resp.status_code == 429:
+            if attempt < 2:
+                time.sleep(8)
+                continue
+            raise ValueError("Anthropic rate limit reached.")
+
+        if resp.status_code in (401, 403):
+            raise ValueError("Invalid Anthropic API key — check it at console.anthropic.com.")
+
+        if resp.status_code == 400:
+            try:
+                err_detail = resp.json().get("error", {}).get("message", resp.text[:200])
+            except Exception:
+                err_detail = resp.text[:200]
+            raise ValueError(f"Anthropic rejected request (400): {err_detail}")
+
+        resp.raise_for_status()
+
+        raw = resp.json()["content"][0]["text"].strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+
+        if not raw:
+            last_json_error = json.JSONDecodeError("Anthropic returned an empty response", "", 0)
+            time.sleep(3)
+            continue
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            pass
+
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError as e:
+                last_json_error = e
+        else:
+            last_json_error = json.JSONDecodeError("No JSON object found in Anthropic response", raw, 0)
+
+        time.sleep(3)
+
+    raise last_json_error
+
+
 def run_audit_with_fallbacks(scraped: dict):
-    """Try LLM providers in order: Groq → Gemini → synthetic.
+    """Try LLM providers in order: Groq → XAI → Gemini → Anthropic → synthetic.
     Returns either an audit dict, or a (jsonify_response, status_code) tuple on hard failure."""
     providers = [
         ("Groq", GROQ_API_KEY, analyze_with_llm),
+        ("XAI", XAI_API_KEY, analyze_with_xai),
         ("Gemini", GEMINI_API_KEY, analyze_with_gemini),
+        ("Anthropic", ANTHROPIC_API_KEY, analyze_with_anthropic),
     ]
 
     errors = []
@@ -586,8 +684,8 @@ def index():
 
 @app.route("/api/audit", methods=["POST"])
 def audit():
-    if not (GROQ_API_KEY or GEMINI_API_KEY):
-        return jsonify({"error": "No LLM API key configured. Set GROQ_API_KEY or GEMINI_API_KEY in Render."}), 503
+    if not (GROQ_API_KEY or GEMINI_API_KEY or XAI_API_KEY or ANTHROPIC_API_KEY):
+        return jsonify({"error": "No LLM API key configured. Set GROQ_API_KEY, GEMINI_API_KEY, XAI_API_KEY, or ANTHROPIC_API_KEY."}), 503
 
     body = request.get_json(force=True)
     url = (body.get("url") or "").strip()
