@@ -625,9 +625,9 @@ def audit():
         return jsonify({"error": f"Could not fetch the page: {e}"}), 422
 
     is_near_empty = (
-        scraped["word_count"] < 50
-        and len(scraped["headings"]) <= 1
-        and not scraped["meta_description"]
+        scraped["word_count"] < 10
+        and not scraped["headings"]
+        and not scraped["title"]
     )
 
     if is_near_empty:
@@ -642,6 +642,7 @@ def audit():
             "url": scraped["url"],
             "title": scraped["title"],
             "word_count": scraped["word_count"],
+            "headings_count": len(scraped["headings"]),
             "has_schema": scraped["has_schema_markup"],
             "schema_types": scraped["schema_types"],
             "has_faq": scraped["has_faq_section"],
